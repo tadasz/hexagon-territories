@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>H3 Hexagon Map Prototype - Kaunas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    /* Add styles for the map switcher */
+    .map-switcher {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .map-switcher button {
+      display: block;
+      margin: 5px 0;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .map-switcher button:hover {
+      background: #45a049;
+    }
+    .hexagon {
+      transition: opacity 1.5s ease-in-out;
+    }
+
+    .hexagon-entering {
+      opacity: 0;
+    }
+
+    .hexagon-exiting {
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="map-switcher">
+    <button onclick="switchMapStyle('osm')">OpenStreetMap</button>
+    <button onclick="switchMapStyle('dark')">Dark Matter</button>
+    <button onclick="switchMapStyle('streets')">Streets</button>
+    <button onclick="switchMapStyle('terrain')">Terrain</button>
+    <button onclick="switchMapStyle('bright')">Bright</button>
+  </div>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <!-- h3-js UMD build from jsDelivr -->
+  <script src="https://cdn.jsdelivr.net/npm/h3-js@3.7.2/dist/h3-js.umd.min.js"></script>
+  <script>
+    // Check if h3 is loaded
+    if (!window.h3) {
+      console.error("h3 is not defined. Check your h3-js script source.");
+    } else {
+      console.log("h3 loaded:", h3);
+    }
+
+    // Add configuration constants at the start of the script
+    const CONFIG = {
+      animations: {
+        hexagonFadeIn: 1.2,    // seconds for fade in (zooming in)
+        hexagonFadeOut: 0.6,   // seconds for fade out (zooming out)
+        mapFlyTo: 0.8,         // seconds for map zoom animation
+        debounceDelay: 100     // milliseconds for debouncing updates
+      },
+      map: {
+        center: [55.1694, 23.8813],  // Lithuania center
+        defaultZoom: 7,
+        maxZoom: 18,
+        tileOpacity: 0.7,
+        padding: 0.1            // 10% padding for visible area
+      },
+      styles: {
+        hexagon: {
+          baseOpacity: 0.3,
+          hoverOpacity: 0.8,
+          weight: 2,
+          hoverWeight: 3
+        },
+        borders: {
+          dark: 'rgba(144, 202, 249, 0.5)',
+          bright: 'rgba(76, 175, 80, 0.5)',
+          terrain: 'rgba(255, 87, 34, 0.5)',
+          streets: 'rgba(123, 31, 162, 0.5)'
+        }
+      }
+    };
+
+    // Update CSS to use configuration
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      .hexagon {
+        transition: opacity var(--fade-duration) ease-in-out;
+      }
+    `;
+    document.head.appendChild(styleElement);
+
+    // Move this up, right after the CONFIG definition
+    // Update zoom level to resolution mapping for bigger jumps
+    const zoomToResolution = {
+      18: 9, // Smallest hexagons (base size)
+      17: 9,
+      16: 9,
+      15: 8, // ~7x larger than res 9
+      14: 8,
+      13: 7, // ~7x larger than res 8
+      12: 7,
+      11: 6, // ~7x larger than res 7
+      10: 6,
+      9: 5,  // ~7x larger than res 6
+      8: 5,
+      7: 4,  // ~7x larger than res 5
+      6: 4,
+      5: 3,  // ~7x larger than res 4
+      4: 3,
+      3: 2,  // ~7x larger than res 3
+      2: 2,
+      1: 1,  // Largest hexagons
+      0: 1
+    };
+
+    // Keep track of current hexagons and resolution
+    let currentHexagons = [];
+    let currentResolution = null;
+    let previousResolution = null;  // Add this to properly track resolution changes
+
+    // 1. Initialize the Leaflet map centered on Kaunas, Lithuania
+    var map = L.map('map').setView(CONFIG.map.center, CONFIG.map.defaultZoom);
+
+    // Update map styles to include all OpenMapTiles styles
+    const mapStyles = {
+      osm: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }
+      },
+      dark: {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        options: {
+          attribution: '© OpenStreetMap contributors © CARTO',
+          maxZoom: 19
+        }
+      },
+      streets: {
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }
+      },
+      terrain: {
+        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        options: {
+          attribution: '© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)',
+          maxZoom: 17
+        }
+      },
+      bright: {
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png',
+        options: {
+          attribution: '© OpenStreetMap contributors © CARTO',
+          maxZoom: 19
+        }
+      }
+    };
+
+    let currentLayer = null;
+
+    // Update territory configuration
+    const territoryConfig = {
+      // Default probabilities (they should sum to 1)
+      probabilities: {
+        player1: 0.5,    // Dog Walker
+        player2: 0.2,    // Cat Person
+        player3: 0.3,    // Fox Trainer
+        unclaimed: 0.0   // No Dogs Land
+      },
+      // Player information
+      players: {
+        player1: {
+          name: 'Dog Walker',
+          emoji: '🐕',
+          colors: {
+            light: '#4CAF50',
+            dark: '#2E7D32'
+          }
+        },
+        player2: {
+          name: 'Cat Person',
+          emoji: '🐱',
+          colors: {
+            light: '#2196F3',
+            dark: '#1976D2'
+          }
+        },
+        player3: {
+          name: 'Fox Trainer',
+          emoji: '🦊',
+          colors: {
+            light: '#FFC107',
+            dark: '#FFA000'
+          }
+        }
+      }
+    };
+
+    // Add a map to store territory states
+    const territoryStates = new Map();
+
+    // Add function to get child hexagons
+    function getChildHexagons(h3Index, childRes) {
+      return h3.h3ToChildren(h3Index, childRes);
+    }
+
+    // Add function to get parent hexagon
+    function getParentHexagon(h3Index, parentRes) {
+      return h3.h3ToParent(h3Index, parentRes);
+    }
+
+    // Add function to check if parent color is dominant in children
+    function isParentColorDominant(children, parentState) {
+      const stateCounts = {};
+      let totalCount = 0;
+      
+      children.forEach(child => {
+        const state = territoryStates.get(child);
+        stateCounts[state] = (stateCounts[state] || 0) + 1;
+        totalCount++;
+      });
+
+      // Parent color should have more than 50% of children
+      return (stateCounts[parentState] || 0) > totalCount * 0.5;
+    }
+
+    // Add debug logging for resolution changes
+    function updateHexagons() {
+      const zoom = map.getZoom();
+      const newResolution = zoomToResolution[zoom] || 9;
+
+      // Store previous resolution before updating current
+      previousResolution = currentResolution;
+      
+      console.log('Resolution change:', {
+        zoom,
+        previousResolution,
+        newResolution,
+        isZoomingOut: previousResolution && newResolution < previousResolution,
+        isZoomingIn: previousResolution && newResolution > previousResolution
+      });
+
+      // Update current resolution
+      currentResolution = newResolution;
+
+      // Set the appropriate fade duration
+      document.documentElement.style.setProperty(
+        '--fade-duration',
+        `${previousResolution && newResolution < previousResolution ? CONFIG.animations.hexagonFadeOut : CONFIG.animations.hexagonFadeIn}s`
+      );
+
+      // Start creating new hexagons immediately
+      try {
+        // Get current map bounds
+        const bounds = map.getBounds();
+        const north = bounds.getNorth();
+        const south = bounds.getSouth();
+        const east = bounds.getEast();
+        const west = bounds.getWest();
+
+        // Create view polygon
+        const padding = CONFIG.map.padding;
+        const latPadding = (north - south) * padding;
+        const lngPadding = (east - west) * padding;
+        
+        const viewPolygon = [
+          [west - lngPadding, south - latPadding],
+          [east + lngPadding, south - latPadding],
+          [east + lngPadding, north + latPadding],
+          [west - lngPadding, north + latPadding],
+          [west - lngPadding, south - latPadding]
+        ];
+
+        // Generate and draw new hexagons
+        const visibleGeoPolygon = [viewPolygon];
+        const hexagons = h3.polyfill(visibleGeoPolygon, newResolution, true);
+        const newHexagons = [];
+
+        // If resolution changed, animate. If not, just remove old hexagons immediately
+        if (previousResolution && newResolution < previousResolution) {
+          currentHexagons.forEach(hexagon => {
+            hexagon._path.classList.add('hexagon-exiting');
+          });
+
+          setTimeout(() => {
+            currentHexagons.forEach(hexagon => hexagon.remove());
+            currentHexagons = newHexagons;
+          }, (previousResolution && newResolution < previousResolution ? CONFIG.animations.hexagonFadeOut : CONFIG.animations.hexagonFadeIn) * 1000);
+        } else {
+          currentHexagons.forEach(hexagon => hexagon.remove());
+          currentHexagons = newHexagons;
+        }
+
+        // Draw new hexagons
+        hexagons.forEach(function(h3Index) {
+          try {
+            const boundary = h3.h3ToGeoBoundary(h3Index, false);
+            const hexBounds = L.latLngBounds(boundary);
+            if (bounds.intersects(hexBounds)) {
+              const territoryState = getTerritoryState(h3Index, newResolution);
+              const hexagon = L.polygon(boundary, {
+                ...getHexagonStyleForMap(currentStyle || 'osm', territoryState),
+                className: 'hexagon'
+              }).addTo(map);
+
+              newHexagons.push(hexagon);
+
+              // Update the mouseover handler to remove tooltip
+              hexagon.on('mouseover', function(e) {
+                this.setStyle({
+                  weight: CONFIG.styles.hexagon.hoverWeight,
+                  fillOpacity: CONFIG.styles.hexagon.hoverOpacity
+                });
+              });
+
+              hexagon.on('mouseout', function(e) {
+                this.setStyle({
+                  weight: CONFIG.styles.hexagon.weight,
+                  fillOpacity: CONFIG.styles.hexagon.baseOpacity
+                });
+              });
+
+              hexagon.on('click', function(e) {
+                const bounds = this.getBounds();
+                const center = bounds.getCenter();
+                const currentZoom = map.getZoom();
+                const newZoom = Math.min(currentZoom + 1, CONFIG.map.maxZoom);
+                
+                map.flyTo(center, newZoom, {
+                  animate: true,
+                  duration: CONFIG.animations.mapFlyTo
+                });
+              });
+            }
+          } catch (error) {
+            console.error('Error drawing hexagon:', h3Index, error);
+          }
+        });
+
+      } catch (error) {
+        console.error('Error generating hexagons:', error);
+      }
+    }
+
+    // Track current style
+    let currentStyle = 'osm';
+
+    // Update switchMapStyle function
+    function switchMapStyle(styleName) {
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+      }
+      
+      currentStyle = styleName;
+      const style = mapStyles[styleName];
+      currentLayer = L.tileLayer(style.url, {
+        ...style.options,
+        opacity: CONFIG.map.tileOpacity
+      }).addTo(map);
+
+      // Update hexagon styles
+      updateHexagons();
+    }
+
+    // Add debounce function to prevent too frequent updates
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // Use debounced version of updateHexagons
+    const debouncedUpdateHexagons = debounce(updateHexagons, CONFIG.animations.debounceDelay);
+
+    // Update event handlers to use debounced function
+    map.on('zoomend moveend', debouncedUpdateHexagons);
+
+    // Initialize map
+    switchMapStyle('osm');
+
+    // 2. Function to generate a circular polygon (array of [lat, lng]) around a center
+    function circleToPolygon(center, radiusKm, numSides) {
+      var lat = center[0] * Math.PI / 180;
+      var lng = center[1] * Math.PI / 180;
+      var d = radiusKm / 6371; // Earth's radius in km
+      var coords = [];
+      for (var i = 0; i < numSides; i++) {
+        var angle = 2 * Math.PI * i / numSides;
+        var lat_i = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(angle));
+        var lng_i = lng + Math.atan2(
+          Math.sin(angle) * Math.sin(d) * Math.cos(lat),
+          Math.cos(d) - Math.sin(lat) * Math.sin(lat_i)
+        );
+        // Convert back to degrees
+        coords.push([lat_i * 180 / Math.PI, lng_i * 180 / Math.PI]);
+      }
+      // Close the polygon by repeating the first coordinate
+      coords.push(coords[0]);
+      return coords;
+    }
+
+    // 3. Create a polygon for the region (covering all Lithuania)
+    var center = [55.1694, 23.8813]; // Center of Lithuania
+    var radiusKm = 200; // Large enough to cover most of Lithuania
+    var numSides = 32;
+    var circlePolygon = circleToPolygon(center, radiusKm, numSides);
+
+    // Modified: Convert the polygon to the format H3 expects (longitude first, then latitude)
+    var h3Polygon = circlePolygon.map(coord => [coord[1], coord[0]]);
+    var geoPolygon = [h3Polygon];
+
+    // Function to generate a random pastel color
+    function getRandomPastelColor() {
+      const hue = Math.floor(Math.random() * 360);
+      return `hsl(${hue}, 70%, 80%)`;
+    }
+
+    // Function to determine if hexagon has been "conquered"
+    function isConquered() {
+      return Math.random() > 0.7; // 30% chance of being conquered (for demo)
+    }
+
+    // Add this function to get hexagon edge length in kilometers
+    function getHexagonSize(resolution) {
+      const sizes = {
+        9: 0.174, // ~174 meters
+        8: 0.461, // ~461 meters
+        7: 1.220, // ~1.22 km
+        6: 3.230, // ~3.23 km
+        5: 8.544, // ~8.54 km
+        4: 22.606, // ~22.6 km
+        3: 59.810, // ~59.8 km
+        2: 158.244, // ~158.2 km
+        1: 418.676, // ~418.7 km
+      };
+      return sizes[resolution] || 0.174;
+    }
+
+    // Update getTerritoryState to use previousResolution
+    function getTerritoryState(h3Index, resolution) {
+      // Return existing state if we have one
+      if (territoryStates.has(h3Index)) {
+        return territoryStates.get(h3Index);
+      } else {
+        console.log(`New hexagon ${h3Index}:`, {
+          resolution,
+          previousResolution,
+          currentResolution,
+          zoomingOut: previousResolution && resolution < previousResolution,
+          zoomingIn: previousResolution && resolution > previousResolution
+        });
+      }
+
+      // If zooming out (going to lower resolution)
+      if (previousResolution && resolution < previousResolution) {
+        console.log(`Zooming OUT from ${previousResolution} to ${resolution}`);
+        const childRes = previousResolution;
+        const children = getChildHexagons(h3Index, childRes);
+        
+        console.log(`Hexagon ${h3Index}: Zooming OUT. Checking ${children.length} children...`);
+        
+        // Count states of children
+        const stateCounts = {};
+        let maxCount = 0;
+        let dominantState = null;
+
+        children.forEach(childIndex => {
+          const state = territoryStates.get(childIndex);
+          if (state) {
+            stateCounts[state] = (stateCounts[state] || 0) + 1;
+            if (stateCounts[state] > maxCount) {
+              maxCount = stateCounts[state];
+              dominantState = state;
+            }
+          }
+        });
+
+        // If we found a dominant state among children, use it
+        if (dominantState) {
+          console.log(`Hexagon ${h3Index}: Using dominant child state: ${dominantState} (${maxCount} children)`);
+          territoryStates.set(h3Index, dominantState);
+          return dominantState;
+        } else {
+          console.log(`Hexagon ${h3Index}: No children states found!`);
+        }
+      }
+
+      // If zooming in (going to higher resolution)
+      if (previousResolution && resolution > previousResolution) {
+        console.log(`Zooming IN from ${previousResolution} to ${resolution}`);
+        const parentRes = previousResolution;
+        const parentIndex = getParentHexagon(h3Index, parentRes);
+        const parentState = territoryStates.get(parentIndex);
+
+        if (parentState) {
+          console.log(`Processing hexagon ${h3Index}:`);
+          console.log(`- Parent hexagon: ${parentIndex}`);
+          console.log(`- Parent state: ${parentState}`);
+          
+          // Get all siblings (children of the same parent)
+          const siblings = getChildHexagons(parentIndex, resolution);
+          console.log(`- Found ${siblings.length} sibling hexagons`);
+          
+          // If this hexagon's state isn't set yet, we need to generate states for all siblings
+          if (!siblings.every(h => territoryStates.has(h))) {
+            console.log('- Generating new states for all siblings');
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            while (attempts < maxAttempts) {
+              console.log(`  Attempt ${attempts + 1}:`);
+              // Clear previous attempt
+              siblings.forEach(h => territoryStates.delete(h));
+              
+              // Count distribution for logging
+              const distribution = {};
+              
+              // Assign new random states to all siblings
+              siblings.forEach(h => {
+                const rand = Math.random();
+                if (rand < 0.7) {
+                  territoryStates.set(h, parentState);
+                  distribution[parentState] = (distribution[parentState] || 0) + 1;
+                } else {
+                  const otherStates = Object.keys(territoryConfig.players)
+                    .filter(s => s !== parentState);
+                  const randomState = otherStates[Math.floor(Math.random() * otherStates.length)];
+                  territoryStates.set(h, randomState);
+                  distribution[randomState] = (distribution[randomState] || 0) + 1;
+                }
+              });
+
+              console.log(`  Distribution:`, distribution);
+
+              // Check if distribution is valid
+              if (isParentColorDominant(siblings, parentState)) {
+                console.log(`  ✓ Valid distribution found`);
+                break;
+              } else {
+                console.log(`  ✗ Invalid distribution, retrying...`);
+              }
+              
+              attempts++;
+            }
+            
+            if (attempts === maxAttempts) {
+              console.log('! Max attempts reached, using last distribution');
+            }
+          } else {
+            console.log('- Using existing sibling states');
+          }
+          
+          return territoryStates.get(h3Index);
+        } else {
+          console.log(`No parent state found for ${parentIndex}`);
+        }
+      }
+
+      // For initial territories, use original probability distribution
+    //   console.log(`Hexagon ${h3Index}: Initial assignment...`);
+      const rand = Math.random();
+      let cumulativeProbability = 0;
+      
+      for (const [state, probability] of Object.entries(territoryConfig.probabilities)) {
+        cumulativeProbability += probability;
+        if (rand <= cumulativeProbability) {
+        //   console.log(`Hexagon ${h3Index}: Initially assigned state: ${state}`);
+          territoryStates.set(h3Index, state);
+          return state;
+        }
+      }
+      
+      const firstPlayer = Object.keys(territoryConfig.probabilities)[0];
+      territoryStates.set(h3Index, firstPlayer);
+      return firstPlayer;
+    }
+
+    // Update tooltip functions to use configuration
+    function getTerritoryEmoji(state) {
+      return territoryConfig.players[state].emoji;
+    }
+
+    function getTerritoryLabel(state) {
+      return territoryConfig.players[state].name;
+    }
+
+    // Update hexagon style function to use configuration
+    function getHexagonStyleForMap(mapStyle, territoryState) {
+      const baseStyle = {
+        weight: CONFIG.styles.hexagon.weight,
+        fillOpacity: CONFIG.styles.hexagon.baseOpacity
+      };
+
+      // Get appropriate color based on map style and territory state
+      const getColor = (state) => {
+        const colors = territoryConfig.players[state].colors;
+        return mapStyle === 'dark' ? colors.light : colors.dark;
+      };
+
+      // Get border color based on map style
+      const getBorderColor = () => {
+        return CONFIG.styles.borders[mapStyle] || CONFIG.styles.borders.bright;
+      };
+
+      return {
+        ...baseStyle,
+        color: getBorderColor(),
+        fillColor: getColor(territoryState)
+      };
+    }
+  </script>
+</body>
+</html>
