@@ -4,6 +4,7 @@ import {
   HexDetailSchema,
   HexListItemSchema,
   HexListQuerySchema,
+  HexReckoningEntrySchema,
   ReckoningLatestSchema,
   ReckoningRunRequestSchema,
   ReckoningRunResultSchema,
@@ -36,13 +37,23 @@ describe('territory TypeBox schemas (data-model.md §2)', () => {
     }
   });
 
-  it('renders nullable primitives as type: [x, null] and the captain as oneOf', () => {
+  it('renders nullable primitives as type: [x, null] and the captain as an inline nullable object', () => {
     expect(HexListItemSchema.properties.owner.type).toEqual(['integer', 'null']);
     expect(HexListItemSchema.properties.ownerSince.type).toEqual(['string', 'null']);
     expect(ReckoningLatestSchema.properties.weekId.type).toEqual(['string', 'null']);
-    expect(HexDetailSchema.properties.captain).toMatchObject({
-      oneOf: [{ $ref: 'HexCaptain#' }, { type: 'null' }],
-    });
+    // Not `oneOf: [$ref, null]`: swift-openapi-generator drops such a property and the generated
+    // client would reject every response carrying a captain (003 analysis.md I1, 004 analysis.md I1).
+    for (const captain of [
+      HexDetailSchema.properties.captain,
+      HexReckoningEntrySchema.properties.captain,
+    ]) {
+      expect(captain).not.toHaveProperty('oneOf');
+      expect(captain).toMatchObject({
+        type: ['object', 'null'],
+        additionalProperties: false,
+        required: ['userId', 'displayName'],
+      });
+    }
     expect(HexDetailSchema.required).toEqual([
       'h3',
       'owner',

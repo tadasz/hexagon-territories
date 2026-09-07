@@ -730,7 +730,14 @@
             "items": { "$ref": "#/components/schemas/FactionStrength" }
           },
           "captain": {
-            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
+            "type": ["null", "object"],
+            "additionalProperties": false,
+            "required": ["userId", "displayName"],
+            "properties": {
+              "userId": { "format": "uuid", "type": "string" },
+              "displayName": { "type": "string" }
+            },
+            "description": "Captain of the cell (top walker of the owning faction that week) or null. Same shape as #/components/schemas/HexCaptain, written inline as a nullable object for the generated clients."
           }
         }
       },
@@ -753,7 +760,14 @@
           "owner": { "type": ["null", "integer"] },
           "ownerSince": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
           "captain": {
-            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
+            "type": ["null", "object"],
+            "additionalProperties": false,
+            "required": ["userId", "displayName"],
+            "properties": {
+              "userId": { "format": "uuid", "type": "string" },
+              "displayName": { "type": "string" }
+            },
+            "description": "Captain of the cell (top walker of the owning faction that week) or null. Same shape as #/components/schemas/HexCaptain, written inline as a nullable object for the generated clients."
           },
           "strengths": {
             "description": "Sorted by factionId",

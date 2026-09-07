@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-07
 
-**Status**: Draft
+**Status**: Implemented (2026-09-07; owner and first-CI-run follow-ups in `tasks.md` Phase 4, T023–T024)
 
 **Input**: User description: "Weekly reckoning job: decay, ownership with hysteresis, captains, ownership events, parent rollup, snapshots; hex read endpoints and contested read model; reckoning results endpoint and push; walk-sim --reckon"
 

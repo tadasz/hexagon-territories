@@ -109,9 +109,19 @@ export const HexCaptainSchema = Type.Object(
 export type HexCaptain = Static<typeof HexCaptainSchema>;
 export const HexCaptainRef = Type.Unsafe<HexCaptain>({ $ref: 'HexCaptain#' });
 
-/** `HexCaptain | null` as `oneOf` (the contract's form). */
+/**
+ * `HexCaptain | null`, written inline as a nullable object (`type: [object, null]`) rather than
+ * `oneOf: [$ref, null]`: swift-openapi-generator 1.13 drops a `oneOf` property that contains
+ * `{type: null}`, and with `additionalProperties: false` the generated client would then reject
+ * every response carrying a captain (the 003 `WalkSummary.path` finding, analysis.md I1).
+ */
 const NullableCaptain: TSchema & { static: HexCaptain | null } = Type.Unsafe<HexCaptain | null>({
-  oneOf: [{ $ref: 'HexCaptain#' }, { type: 'null' }],
+  type: ['object', 'null'],
+  additionalProperties: false,
+  required: ['userId', 'displayName'],
+  properties: HexCaptainSchema.properties,
+  description:
+    'Captain of the cell (top walker of the owning faction that week) or null. Same shape as #/components/schemas/HexCaptain, written inline as a nullable object for the generated clients.',
 });
 
 export const HexMeSchema = Type.Object(

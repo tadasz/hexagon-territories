@@ -32,13 +32,16 @@ To point Spec Kit at a feature without switching branches, set both variables be
 | `swift test` in `apps/ios/Packages/H3Kit` and `.../TerritoryRules` | Swift side of the rules, Linux or macOS; the app target needs macOS (`apps/ios/README.md`, `apps/ios/VERIFY.md`) |
 | `swift test` in `apps/ios/Packages/{Core,APIClient,AuthFeature,FactionsFeature,ProfileFeature,DesignSystem}` | auth session, generated client, view models; Linux or macOS (SwiftUI/Keychain code is behind `canImport` and is only type-checked on macOS) |
 | `swift test` in `apps/ios/Packages/{Location,Persistence,WalkFeature}` | walk recording (fixture parity with the rules), GRDB outbox + `SyncCoordinator`, walk view models; Linux needs `libsqlite3-dev` (GRDB links the system SQLite); CoreLocation/CoreMotion code is behind `canImport` |
+| `pnpm --filter @nature/api job:reckoning --week 2026-W37 [--dry-run]` | run (or preview) the weekly reckoning for one ended ISO week; without `--week` every missed week in order (`reckoning.weekly`) |
+| `pnpm --filter @nature/api job:consistency [--repair]` | re-derive every res 8–5 parent and report drift; `--repair` upserts the fixed rows (`reckoning.consistency`) |
+| `pnpm --silent --filter @nature/walk-sim walk-sim reckon <weekId> --base-url … --token … [--dry-run] [--async]` | the same through `POST /v1/admin/reckonings/{weekId}`; needs a user with role `admin` (`update users set role = 'admin' where id = …`) |
 | `python3 -m unittest discover -s ml/tests -v` | model manifest and download-script tests (stdlib only) |
 
 Every TypeScript workspace exposes `build`, `test`, `lint`, `typecheck`, `clean`; turbo runs them from the root. Formatting is Prettier (`pnpm format`); `.prettierignore` excludes generated files (`apps/api/drizzle/meta`, `pnpm-lock.yaml`, `.specify`).
 
 ## Parallel agents (stream ownership)
 
-When a feature's `tasks.md` splits work into streams, each agent edits **only the paths listed for its stream** in the "Stream ownership" table and never the root files (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `README.md`, `CLAUDE.md`, `pnpm-lock.yaml`, lint/format configs) — those belong to the integration stream, which runs after the others are merged. Install dependencies package-locally if you must, but do not hand over `node_modules`, `dist` or a lockfile; the integration stream regenerates them. Without Docker run `SKIP_DB_TESTS=1`; without Swift review Swift changes by file list and note it in the PR; without git-lfs never commit raw `.onnx`/`.tflite` files.
+When a feature's `tasks.md` splits work into streams, each agent edits **only the paths listed for its stream** in the "Stream ownership" table and never the root files (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.gitignore`, `README.md`, `CLAUDE.md`, `pnpm-lock.yaml`, lint/format configs) — those belong to the integration stream, which runs after the others are merged. Install dependencies package-locally if you must, but do not hand over `node_modules`, `dist` or a lockfile; the integration stream regenerates them. Without Docker run `SKIP_DB_TESTS=1`; `SKIP_PERF=1` skips the timed 10 000-cell reckoning suite (CI sets it on pull requests); without Swift review Swift changes by file list and note it in the PR; without git-lfs never commit raw `.onnx`/`.tflite` files.
 
 Roadmap and feature backlog: `docs/roadmap.md`. MVP scope: `docs/mvp.md`. Decisions: `docs/adr/`. Licences: `docs/licences.md`.
 

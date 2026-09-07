@@ -444,9 +444,17 @@ components:
           items:
             $ref: "#/components/schemas/FactionStrength"
         captain:
-          oneOf:
-            - $ref: "#/components/schemas/HexCaptain"
-            - type: "null"
+          # Inline nullable object, not `oneOf: [$ref, null]`: swift-openapi-generator drops the
+          # latter and the client would reject responses carrying a captain (003 analysis.md I1).
+          type: [object, "null"]
+          additionalProperties: false
+          required: [userId, displayName]
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
 
     HexDetail:
       type: object
@@ -462,9 +470,17 @@ components:
           type: [string, "null"]
           pattern: "^[0-9]{4}-W[0-9]{2}$"
         captain:
-          oneOf:
-            - $ref: "#/components/schemas/HexCaptain"
-            - type: "null"
+          # Inline nullable object, not `oneOf: [$ref, null]`: swift-openapi-generator drops the
+          # latter and the client would reject responses carrying a captain (003 analysis.md I1).
+          type: [object, "null"]
+          additionalProperties: false
+          required: [userId, displayName]
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
         strengths:
           type: array
           items:

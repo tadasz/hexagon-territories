@@ -1,5 +1,6 @@
 # API, packages and Swift-package CI (specs/001-repo-foundations/tasks.md T027, research.md R8;
-# specs/002-auth-and-factions/tasks.md T030; specs/003-walk-tracking/tasks.md T029).
+# specs/002-auth-and-factions/tasks.md T030; specs/003-walk-tracking/tasks.md T029;
+# specs/004-weekly-reckoning/tasks.md T020).
 #
 # Validation note: GitHub Actions cannot run in the authoring container, so this workflow was
 # validated by parsing it with `yq` and by checking every step against the documented inputs of
@@ -14,6 +15,20 @@
 # directly with DATABASE_URL pointing at the image built from infra/docker/postgres. The auth
 # variables (JWT_SECRET, APPLE_CLIENT_IDS, APPLE_JWKS_URL) are set by apps/api/test/helpers/app.ts,
 # so no job exports them.
+#
+# Feature 004 (T020): the `api` job first applies migrations 0000–0005 to the `nature` database of the
+# h3-pg image with `db:migrate` (the integration suites migrate their own throwaway `nature_test_*`
+# databases, so this step is the one place the committed journal is exercised end to end on the
+# production image; `loadConfig` needs a JWT_SECRET, hence the dev value on that step only). The
+# timed 10 267-cell reckoning suite (`reckoning-perf.test.ts`, SC-003) takes 2–5 s on a developer
+# machine but is the one suite whose duration depends on the runner, so pull requests run with
+# `SKIP_PERF=1` (the suite reports itself as skipped) and the perf suite runs on every push to
+# `main` and on `workflow_dispatch` — the choice recommended in tasks.md T020: keep the PR loop
+# deterministic, still measure once per merge. The reckoning knobs (RECKONING_BATCH_SIZE,
+# HEX_BBOX_MAX_CELLS, RECKONING_CONSISTENCY_CRON) are not exported: the suites set the values they
+# need (batch size 3 in the resume test, 1 000 in the perf test) and everything else uses the
+# defaults of apps/api/src/modules/territory/limits.ts. turbo.json lists all four (and SKIP_PERF) in
+# `globalPassThroughEnv`, so an operator can still override them for a local `pnpm test:db`.
 #
 # `@nature/api-schema` (packages/*) devDepends on `@nature/api`: its snapshot test boots the API's
 # `openapi:print`, so the `rules` job builds `@nature/api` and its workspace dependencies first
@@ -36,6 +51,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -116,7 +132,18 @@ jobs:
       - name: Build @nature/api, @nature/walk-sim and their dependencies (the API tests import the walk-sim oracle)
         run: pnpm turbo run build --filter=@nature/api... --filter=@nature/walk-sim...
       - run: pnpm turbo run lint typecheck --filter=@nature/api
-      - name: API tests (unit + integration against the built image)
+      - name: Apply migrations 0000–0005 to the h3-pg image (drizzle journal end to end)
+        env:
+          JWT_SECRET: ci-only-secret-ci-only-secret-0123456
+        run: |
+          pnpm --filter @nature/api db:migrate
+          docker exec pg psql -U nature -d nature -tA -v ON_ERROR_STOP=1 \
+            -c "select count(*) from drizzle.__drizzle_migrations" | tee /dev/stderr | grep -qx 6
+          docker exec pg psql -U nature -d nature -tA -v ON_ERROR_STOP=1 \
+            -c "select to_regclass('hex_reckoning_history') is not null and to_regclass('reckoning_consistency') is not null" | grep -qx t
+      - name: API tests (unit + integration against the built image; perf suite skipped on pull requests)
+        env:
+          SKIP_PERF: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: pnpm --filter @nature/api test
 
   swift:

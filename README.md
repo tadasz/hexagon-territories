@@ -19,6 +19,8 @@ This repository started as a Leaflet + h3-js web prototype (now in `prototype/in
 | [`specs/001-repo-foundations/quickstart.md`](specs/001-repo-foundations/quickstart.md) | How to verify the repo foundations end to end |
 | [`specs/002-auth-and-factions/quickstart.md`](specs/002-auth-and-factions/quickstart.md) | How to verify Sign in with Apple, sessions, factions, profile, deletion and export |
 | [`specs/003-walk-tracking/quickstart.md`](specs/003-walk-tracking/quickstart.md) | How to verify walk recording, sample ingest, `finishWalk` scoring, offline sync and GPX replay |
+| [`specs/004-weekly-reckoning/quickstart.md`](specs/004-weekly-reckoning/quickstart.md) | How to verify the weekly reckoning, the hex read endpoints, the admin trigger and `walk-sim reckon` |
+| [`docs/status.md`](docs/status.md) | Feature status 001–004: converge verdicts, verified test counts, open owner actions |
 | `specs/NNN-name/` | Spec Kit feature directories (spec → plan → tasks) |
 
 ## Layout
@@ -28,7 +30,7 @@ apps/ios        SwiftUI app (XcodeGen project.yml + local Swift packages H3Kit, 
                 Core, APIClient (swift-openapi-generator over the committed snapshot), AuthFeature, FactionsFeature, ProfileFeature,
                 Location (background walk recording), Persistence (GRDB outbox + SyncCoordinator), WalkFeature (Walk tab, history))
 apps/api        @nature/api — Fastify 5 + TypeBox (OpenAPI 3.1) + Drizzle ORM + pg-boss; Sign in with Apple, JWT sessions, factions, profile,
-                walk sessions, sample ingest and the single finishWalk scoring path
+                walk sessions, sample ingest, the single finishWalk scoring path, the weekly reckoning job and the hex read model
 packages/       @nature/territory-rules (pure TS rules), @nature/h3-fixtures (shared JSON fixtures + schema),
                 @nature/api-schema (committed OpenAPI snapshot the iOS client is generated from),
                 @nature/walk-sim (GPX/GeoJSON → timed sample batches; replay CLI and the oracle of the API walk tests)
@@ -64,7 +66,7 @@ make down           # stops the stack and deletes its volumes
 Without Docker, point the integration tests at any Postgres 16 + PostGIS with a superuser:
 `DATABASE_URL=postgres://nature:nature@localhost:5432/nature pnpm test:db` (each suite creates and drops a throwaway `nature_test_*` database). `make help` lists the other targets (`db-migrate`, `db-reset`, `logs`, `lint`).
 
-The API needs `JWT_SECRET` (≥ 32 chars), `APPLE_CLIENT_IDS` (bundle ids, comma-separated) and `APPLE_JWKS_URL`; `S3_*` point at MinIO (`make dev`) or Hetzner Object Storage. The walk limits are tunable through `WALK_AUTOFINISH_AFTER_H` (12), `WALK_SAMPLE_RETENTION_DAYS` (30), `WALK_XP_DAILY_CAP` (300), `WALK_INGEST_BATCHES_PER_15MIN` (30) and `WALK_SAMPLES_PER_DAY` (8 640) — the defaults live in `apps/api/src/modules/walks/limits.ts` and are the numbers `docs/architecture.md` §5 quotes. `apps/api/.env.example` lists every variable with its default; the test helpers set their own values, so `pnpm test` / `pnpm test:db` need none of them.
+The API needs `JWT_SECRET` (≥ 32 chars), `APPLE_CLIENT_IDS` (bundle ids, comma-separated) and `APPLE_JWKS_URL`; `S3_*` point at MinIO (`make dev`) or Hetzner Object Storage. The walk limits are tunable through `WALK_AUTOFINISH_AFTER_H` (12), `WALK_SAMPLE_RETENTION_DAYS` (30), `WALK_XP_DAILY_CAP` (300), `WALK_INGEST_BATCHES_PER_15MIN` (30) and `WALK_SAMPLES_PER_DAY` (8 640) — the defaults live in `apps/api/src/modules/walks/limits.ts` and are the numbers `docs/architecture.md` §5 quotes. The reckoning knobs are `RECKONING_BATCH_SIZE` (1 000 cells per transaction), `HEX_BBOX_MAX_CELLS` (3 000 hexagons per `GET /v1/hexes` request) and `RECKONING_CONSISTENCY_CRON` (`15 3 * * *` UTC) — defaults in `apps/api/src/modules/territory/limits.ts`; the territory rules themselves (decay, hysteresis, parent plurality, flip XP) are not environment variables. `apps/api/.env.example` lists every variable with its default; the test helpers set their own values, so `pnpm test` / `pnpm test:db` need none of them. `SKIP_PERF=1` skips the timed 10 000-cell reckoning suite (`reckoning-perf.test.ts`) in `pnpm test:db`; CI sets it on pull requests and runs the perf suite on `push` to `main` and on manual dispatch.
 
 ### Auth, accounts and the OpenAPI snapshot
 
@@ -91,6 +93,20 @@ pnpm --filter @nature/walk-sim samples:generate             # regenerate the thr
 pnpm --filter @nature/api job:autofinish                    # finish every walk active for more than WALK_AUTOFINISH_AFTER_H once (walk.autofinish; hourly in production)
 pnpm --filter @nature/api job:purge-samples                 # drop location_samples partitions older than WALK_SAMPLE_RETENTION_DAYS once (samples.purge; daily in production)
 ```
+
+### Weekly reckoning
+
+```bash
+pnpm --filter @nature/api job:reckoning                          # reckon every missed ISO week in order (reckoning.weekly; Monday 00:00 UTC in production)
+pnpm --filter @nature/api job:reckoning --week 2026-W37          # exactly that week (must have ended and be the next in sequence)
+pnpm --filter @nature/api job:reckoning --week 2026-W37 --dry-run   # one `h3 from→to` line per flip, then the JSON result; writes nothing, takes no lock
+pnpm --filter @nature/api job:consistency                        # re-derive every res 8–5 parent and report drift (reckoning.consistency; nightly in production)
+pnpm --filter @nature/api job:consistency --repair               # the same, and upsert the corrected parent rows
+pnpm --silent --filter @nature/walk-sim walk-sim reckon 2026-W37 --base-url http://localhost:3000 --token "$TOKEN_ADMIN" --dry-run   # POST /v1/admin/reckonings/{weekId} from a terminal
+pnpm --silent --filter @nature/walk-sim walk-sim reckon 2026-W37 --base-url http://localhost:3000 --token "$TOKEN_ADMIN"             # runs it (add --async to enqueue, --json for the raw result)
+```
+
+`walk-sim reckon` and `POST/GET /v1/admin/reckonings/{weekId}` need a token of a user with role `admin`; there is no self-service path to that role, so create one per environment with `psql "$DATABASE_URL" -c "update users set role = 'admin' where id = '<user id>'"`. A reckoning is idempotent per week (a second run answers the stored result), resumable after a crash (cursor per 1 000-cell batch) and refused while another run holds the advisory lock. `GET /v1/hexes?res=&bbox=`, `GET /v1/hexes/{h3}` and `GET /v1/reckonings/latest` serve the map, the hex detail sheet and the Monday results (feature 005 builds the screens); see `docs/architecture.md` §5.
 
 `--silent` keeps pnpm's own banner out of the JSON. `packages/walk-sim/README.md` documents the distortion flags (`--teleport`, `--spoof-no-steps`, `--jitter`, …), the library API used by `apps/api/test/integration/walks-finish.test.ts` and the GPX `<extensions>` that pin a scenario. Scoring happens only in `POST /v1/walks/{id}/finish` (`docs/territory-rules.md` "Scoring at walk finish"); a replay never changes who owns a hexagon.
 
@@ -145,4 +161,4 @@ Point Spec Kit at a feature without switching branches with `export SPECIFY_FEAT
 
 ## Continuous integration
 
-`.github/workflows/api.yml` runs on every pull request: job `rules` (`pnpm lint`, typecheck + tests of `packages/*`, including the `@nature/api-schema` snapshot check), job `api` (builds the Postgres image from `infra/docker/postgres`, smoke-tests h3-pg, then builds, lints and runs the API tests against it) and job `swift` (`swift test` in every Linux-buildable Swift package — including `Location`, `Persistence` and `WalkFeature`, after installing `libsqlite3-dev` for GRDB — inside the official `swift:6.2.1` container). The app target and the SwiftUI views are built and tested by Xcode Cloud once the owner connects the repository (`apps/ios/ci_scripts/ci_post_clone.sh`).
+`.github/workflows/api.yml` runs on every pull request: job `rules` (`pnpm lint`, typecheck + tests of `packages/*`, including the `@nature/api-schema` snapshot check), job `api` (builds the Postgres image from `infra/docker/postgres`, smoke-tests h3-pg, applies migrations 0000–0005 with `db:migrate`, then builds, lints and runs the API tests against it — with `SKIP_PERF=1` on pull requests; the timed 10 000-cell reckoning runs on `push` to `main` and on `workflow_dispatch`) and job `swift` (`swift test` in every Linux-buildable Swift package — including `Location`, `Persistence` and `WalkFeature`, after installing `libsqlite3-dev` for GRDB — inside the official `swift:6.2.1` container). The app target and the SwiftUI views are built and tested by Xcode Cloud once the owner connects the repository (`apps/ios/ci_scripts/ci_post_clone.sh`).

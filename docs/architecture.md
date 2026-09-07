@@ -102,7 +102,9 @@ Viewfinder or `PhotosPicker`, organ chips (leaf/flower/fruit/bark) → 1280 px J
 
 **Fastify modules**: `auth`, `users`, `factions`, `walks`, `territory` (reckoning, hex reads, tiles), `captures`, `species`, `collection`, `leaderboards`, `push`, `admin`. Rules are imported from `packages/territory-rules`.
 
-**Jobs (pg-boss)**: `account.purge` (30 days after `DELETE /v1/me`, idempotent purge registry), `account.export` (data bundle to object storage), `walk.autofinish` (cron `0 * * * *`, singleton; finishes walks active for more than 12 h — `WALK_AUTOFINISH_AFTER_H` — through the same `finishWalk` with `finish_reason = autofinish`), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (cron `30 3 * * *`, singleton; drops whole `location_samples` partitions older than 30 days — `WALK_SAMPLE_RETENTION_DAYS` — and never touches `walk_sessions`, `walk_hex_meters` or the simplified path; runner `job:purge-samples`), `push.send`, `species_mask.refresh` (weekly).
+**Jobs (pg-boss)**: `account.purge` (30 days after `DELETE /v1/me`, idempotent purge registry), `account.export` (data bundle to object storage), `walk.autofinish` (cron `0 * * * *`, singleton; finishes walks active for more than 12 h — `WALK_AUTOFINISH_AFTER_H` — through the same `finishWalk` with `finish_reason = autofinish`), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch — stages below), `reckoning.consistency` (cron `15 3 * * *` UTC — `RECKONING_CONSISTENCY_CRON` — singleton; re-derives every res 8–5 parent from `hex_state`, writes a `reckoning_consistency` row and logs at `error` level on drift; repairs only on request, `job:consistency --repair`, under the reckoning's advisory lock), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (cron `30 3 * * *`, singleton; drops whole `location_samples` partitions older than 30 days — `WALK_SAMPLE_RETENTION_DAYS` — and never touches `walk_sessions`, `walk_hex_meters` or the simplified path; runner `job:purge-samples`), `push.send` (queue created by the API; feature 004 only enqueues one `reckoning_result` row per contributing player and week — `singletonKey = reckoning:<week>:<user>`, `startAfter` = week end + 8 h, expires unconsumed — the worker and device registration arrive in feature 008), `species_mask.refresh` (weekly).
+
+**`reckoning.weekly` stages** (`apps/api/src/modules/territory/reckoning/run.ts`; feature 004): a run is for exactly one ISO week, always the week after the last `done` reckoning (before any reckoning: the earliest week with a contribution, never later than the week that just ended); `runDueReckonings` — the cron worker, the start-up catch-up in `registerJobs` and the `job:reckoning` runner without `--week` — reckons every missed week **in order**. The run takes `pg_try_advisory_lock(1851881589)` on a dedicated client (a second run answers `RECKONING_RUNNING`), creates or resumes the `reckonings` row (`attempt + 1`) and walks the stage machine `walks` (003's stale-walk autofinish) → `cells` (`select … order by h3_r9` in batches of `RECKONING_BATCH_SIZE` = 1 000 cells; each batch applies `applyWeeklyCap` + `reckonWeek`, writes strengths, `hex_state`, events, `hex_reckoning_history`, flip XP and the parent deltas, and advances `cursor_h3_r9` in the same transaction) → `rollup` (`leaderboard_snapshots` top 100 global + per faction, `faction_stats_weekly`) → `push` (queue rows) → `done`. A crash loses at most one uncommitted batch; a failed run is resumed from its stage and cursor; a done week is a no-op that answers the stored result. `--dry-run` / `dryRun` reads a `REPEATABLE READ` snapshot, keeps parent counts in memory, writes nothing, takes no lock and returns the flips it would make (≤ 1 000 entries). Between reckonings `GET /v1/hexes` at res 9 and `GET /v1/hexes/{h3}` compute `pressureLeader`/`contested` from `hex_faction_strength × DECAY + hex_week_contribution[W]` (the helper 003's `weekStanding` also uses); at res 5–8 the list answers `pressureLeader: null`, `contested: false` (a materialised parent pressure is an 008 follow-up).
 
 **REST, JSON, `/v1`, OpenAPI generated**
 
@@ -125,10 +127,17 @@ POST /v1/walks/{id}/finish           {endedAt, pedometerTotal} → WalkSummary {
                                         (idempotent: a finished walk returns the same summary; 400 INVALID_ENDED_AT before startedAt)
 GET  /v1/walks?cursor=&limit=         (newest first, 20 per page, max 50);   GET /v1/walks/{id} (owner only, same shape as the summary)
 
-GET  /v1/hexes?res=&bbox=            → [{h3, owner, ownerSince, pressureLeader, contested}]   (res 5–9, bbox capped per res)
-GET  /v1/hexes/{h3}                  owner, strength per faction, this week's metres per faction, my metres, captain,
-                                     recent captures, last 8 reckonings
-GET  /v1/reckonings/latest           {weekId, ranAt, nextAt, factionTotals, myFlips}
+GET  /v1/hexes?res=&bbox=            → {items:[{h3, owner, ownerSince, pressureLeader, contested}]}   (signed in; res 5–9; bbox refused
+                                     above HEX_BBOX_MAX_CELLS = 3 000 estimated hexagons → 400 BBOX_TOO_LARGE; 120 req/min per player;
+                                     res 5–8 from hex_parent_state without pressure; Cache-Control: private, max-age=30)
+GET  /v1/hexes/{h3}                  res-9 cell only: owner + since, captain (id, displayName), strength per faction, this week's metres
+                                     and bonuses per faction with pressureLeader/contested, my metres and states (explored/flipped/held),
+                                     captures (empty until 006), last 8 reckonings from hex_reckoning_history
+GET  /v1/reckonings/latest           {weekId, ranAt, nextAt, inProgress, factionTotals, myFlips, myFlippedHexes}
+                                     (null week fields and empty totals before the first reckoning)
+POST /v1/admin/reckonings/{weekId}   role admin; {dryRun, sync} → 200 ReckoningRunResult (sync) | 202 queued (reckoning.weekly job,
+                                     singleton) | 400 WEEK_NOT_ENDED | 409 RECKONING_OUT_OF_ORDER {expectedWeekId} / RECKONING_RUNNING
+                                     | 503 JOBS_DISABLED;   GET /v1/admin/reckonings/{weekId} → ReckoningStatus (stage, cursor, counters) | 404
 GET  /v1/tiles/hex/{z}/{x}/{y}.mvt   (feature 008)
 
 POST /v1/captures … /uploaded … /confirm;   GET /v1/captures/{id}
@@ -180,7 +189,14 @@ hex_state(h3_r9 bigint pk, h3_r8, h3_r7, h3_r6, h3_r5 bigint, geom geometry(Poly
       owner_faction_id fk null, owner_since_week text, captain_user_id, last_reckoned_week, last_activity_week, version int)
 hex_ownership_events(id bigserial pk, h3_r9, week_id, from_faction, to_faction, cause, at)
 hex_parent_state(h3 bigint pk, res smallint, geom, owner_faction_id, child_owner_counts jsonb, claimed_children int, updated_at)
-reckonings(week_id text pk, started_at, finished_at, hexes_processed int, flips int, status)
+reckonings(week_id text pk, started_at, finished_at, hexes_processed int, flips int, status 'running|done|failed',
+      stage 'walks|cells|rollup|push|done', cursor_h3_r9 bigint, batches int, parent_flips int, walks_autofinished int,
+      push_queued int, error text, attempt int)                  -- feature 004: resume cursor and stage per week
+hex_reckoning_history(h3_r9, week_id, owner_faction_id, flipped bool, from_faction, to_faction, captain_user_id set null,
+      captain_before_user_id set null, strengths jsonb, had_contributions bool, reckoned_at, pk(h3_r9, week_id))
+      -- one row per processed cell per reckoning; the hex detail's "last 8 reckonings" and the push's "lost captaincy" count
+reckoning_consistency(id bigserial pk, ran_at, parents_checked int, drifted int, repaired int, sample jsonb)
+      -- one row per reckoning.consistency run; `sample` holds up to 20 drift entries (kind missing|extra|owner|counts)
 
 species(id serial pk, kingdom, scientific_name unique, common_name_en, common_name_lt, family, gbif_key unique,
       birdnet_label unique, plantnet_id, rarity_tier smallint, image_url, image_license,
@@ -197,12 +213,13 @@ user_species(user_id fk cascade, species_id fk, first_capture_id, first_seen_at,
 
 points_ledger(id bigserial pk, user_id, faction_id, kind ledger_kind, points, ref_type, ref_id, h3_r9, week_id, created_at)
 streaks(user_id pk, current_days, longest_days, last_active_date, tz default 'UTC')   -- player's local zone, set from the device; streaks are the only local-time rule
-leaderboard_snapshots(week_id, scope, scope_id, rank, user_id, meters real, points int, computed_at, pk(week_id, scope, scope_id, rank))
+leaderboard_snapshots(week_id, scope, scope_id, rank, user_id null, meters real, points int, computed_at, pk(week_id, scope, scope_id, rank))
+      -- user_id is set to NULL when the account is erased (rank and metres kept, feature 004 purge step)
 faction_stats_weekly(week_id, faction_id, hexes_owned_r9, hexes_owned_r7, meters, active_users, captures, pk(week_id, faction_id))
 anti_cheat_flags(id bigserial pk, user_id, walk_id, capture_id, code, details jsonb, created_at, resolved_at, resolution)
 ```
 
-Indexes: btree on every `h3_*` column and on `(user_id, created_at desc)` style access paths; GiST on `geom` and `path_simplified`; partial index on `captures(status)` for the verification queue. H3 cells are stored as `bigint` with parents precomputed in app code so rollups are index-only and the schema never depends on h3-pg. `geom` is stored so PostGIS clipping, bbox and MVT queries need no extension at read time.
+Indexes: btree on every `h3_*` column and on `(user_id, created_at desc)` style access paths; GiST on `geom` and `path_simplified`; partial index on `captures(status)` for the verification queue; partial unique index `points_ledger_hex_flip_unique (user_id, ref_id) WHERE kind = 'hex_flip'` so flip XP is awarded once per player and ownership event however often a reckoning batch is retried; `hex_state(last_reckoned_week)` and `hex_reckoning_history(week_id, captain_before_user_id) WHERE flipped` for the reckoning's skip test and the push tallies. H3 cells are stored as `bigint` with parents precomputed in app code so rollups are index-only and the schema never depends on h3-pg. `geom` is stored so PostGIS clipping, bbox and MVT queries need no extension at read time.
 
 ## 7. Recognition pipelines
 
