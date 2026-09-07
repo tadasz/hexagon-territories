@@ -48,8 +48,6 @@ describe('faction rules', () => {
     const otherRules = doc.slice(doc.indexOf('## Other rules'));
     expect(otherRules).toContain(`once per ${FACTION_CHANGE_COOLDOWN_DAYS} days`);
     expect(otherRules).toContain('fewest active players');
-    // Stream C (tasks.md T029) adds the window wording to the Balance row; the assertion below is
-    // enabled with it:
-    // expect(otherRules).toContain(`${ACTIVE_PLAYER_WINDOW_DAYS} days`);
+    expect(otherRules).toContain(`${ACTIVE_PLAYER_WINDOW_DAYS} days`);
   });
 });

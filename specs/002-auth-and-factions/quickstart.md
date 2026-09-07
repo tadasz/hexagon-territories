@@ -9,7 +9,7 @@ How a reviewer or agent verifies feature `002-auth-and-factions`. Sections map t
 | Node 22, pnpm 10 | A, C | always |
 | Postgres 16 + PostGIS reachable as a superuser | A (integration suites), C | agent container: `DATABASE_URL=postgres://nature:nature@localhost:5432/nature`; otherwise Docker via `make dev` / Testcontainers; `SKIP_DB_TESTS=1` skips |
 | MinIO (Docker) | optional | only for the S3 integration test (`S3_TEST=1`) and the end-to-end export download; unit tests use the in-memory storage |
-| Swift 6 toolchain (Linux or macOS) | B | `swift test` for `Packages/Core` (+ `H3Kit`, `TerritoryRules` regression) |
+| Swift 6.2 toolchain (Linux or macOS) | B, C | `swift test` for `Packages/Core`, `APIClient`, `AuthFeature`, `FactionsFeature`, `ProfileFeature`, `DesignSystem` (+ `H3Kit`, `TerritoryRules` regression); `APIClient` needs network access for SwiftPM |
 | Xcode 16 + XcodeGen | B (app), C | macOS only; generation of the OpenAPI client happens at build time |
 | `jq`, `curl` | A | for the flows below |
 
@@ -128,12 +128,13 @@ Record what was verified where in `apps/ios/VERIFY.md` (Linux vs macOS).
 ## C. Integration (whole feature)
 
 ```bash
-pnpm install                                                             # regenerates pnpm-lock.yaml with the new dependencies
+pnpm install --frozen-lockfile                                           # pnpm-lock.yaml is committed and current (run plain `pnpm install` only after changing a manifest)
 pnpm lint && pnpm typecheck && pnpm test                                 # unit everywhere; DB suites skipped
 DATABASE_URL=postgres://nature:nature@localhost:5432/nature pnpm test:db  # with the DB suites
 pnpm --filter @nature/api-schema snapshot && apps/ios/scripts/sync-openapi.sh && pnpm --filter @nature/api-schema test   # snapshot + iOS copy equal
 git diff --exit-code packages/api-schema/openapi.json apps/ios/Packages/APIClient/Sources/APIClient/openapi.json   # nothing left to commit
 cd apps/ios/Packages/Core && swift test && cd -
+for p in APIClient AuthFeature FactionsFeature ProfileFeature DesignSystem H3Kit TerritoryRules; do (cd apps/ios/Packages/$p && swift test); done   # all Linux-buildable packages (CI job `swift`)
 python3 -m unittest discover -s ml/tests -v                              # unchanged, still green
 grep -n 'once per 30 days\|14 days' docs/territory-rules.md              # both rows present after T029
 export SPECIFY_FEATURE=002-auth-and-factions SPECIFY_FEATURE_DIRECTORY=specs/002-auth-and-factions
@@ -146,7 +147,7 @@ Then run `/speckit-analyze` (report in `analysis.md`) and `/speckit-converge` un
 
 | Date | Commit | API (`pnpm --filter @nature/api test` with DB) | `@nature/api-schema` | Swift `Core` | Where |
 |---|---|---|---|---|---|
-| _(filled by Stream C)_ | | | | | |
+| 2026-09-07 | working tree on `461afc4` (Stream C, uncommitted) | 25 files / 140 tests passed, 1 skipped (S3 integration, `S3_TEST` unset) against local Postgres 16 + PostGIS; `SKIP_DB_TESTS=1`: 16 files / 91 passed, 50 skipped | 3 passed (stale check + iOS copy equality, no longer skipped) | 66 tests, 0 failures; also `APIClient` 13 (generator ran), `AuthFeature` 6, `FactionsFeature` 9, `ProfileFeature` 13, `DesignSystem` 1, `H3Kit` 21, `TerritoryRules` 29 | Linux (Ubuntu 24.04) agent container, Node 22.22.2, pnpm 10.33.0, Swift 6.2.1; no Docker/MinIO, no macOS — `xcodegen`/`xcodebuild` and the simulator flow are follow-up tasks |
 
 ## Owner actions
 

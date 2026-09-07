@@ -2,477 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Nature Explorer API",
-    "version": "0.2.0",
-    "description": "Fragment for feature 002-auth-and-factions: Sign in with Apple, token refresh and logout,\nthe faction list with live statistics and the smallest-faction suggestion, the player's\nprofile, faction selection, account deletion and data export. The running API serves the\nmerged document at GET /openapi.json (generated from TypeBox schemas by @fastify/swagger);\npackages/api-schema/openapi.json is the committed snapshot of that document and the source\nthe iOS client is generated from. The `Error` envelope and `requestId` convention come from\nfeature 001 and are repeated here so this fragment stands alone.\n",
-    "x-source": "TEMPORARY copy converted from specs/002-auth-and-factions/contracts/openapi.yaml; replace with packages/api-schema/openapi.json via apps/ios/scripts/sync-openapi.sh"
-  },
-  "servers": [
-    {
-      "url": "http://localhost:3000",
-      "description": "Local development (make dev)"
-    }
-  ],
-  "tags": [
-    {
-      "name": "auth",
-      "description": "Sign in with Apple, token refresh, logout (rate limited per client address)"
-    },
-    {
-      "name": "factions",
-      "description": "The three factions with live statistics and the suggested faction"
-    },
-    {
-      "name": "me",
-      "description": "The signed-in player's profile, faction, deletion and export"
-    }
-  ],
-  "security": [],
-  "paths": {
-    "/v1/auth/apple": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "operationId": "signInWithApple",
-        "summary": "Sign in (or up) with an Apple identity token",
-        "description": "Verifies `identityToken` against Apple's JWKS (issuer `https://appleid.apple.com`,\naudience = the app's bundle identifier(s)), then creates or resumes the account keyed by\nApple's `sub`. E-mail and `fullName` are stored only when the account is created; later\ncalls ignore them. An account marked deleted within the last 30 days is restored\n(`restored: true`). Rate limited: 20 requests per minute per client address.\n",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthAppleRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Tokens for the (new or existing) account and the player's profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "description": "The identity token is invalid (code INVALID_APPLE_TOKEN, `details.reason` in expired | audience | issuer | signature | malformed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          },
-          "503": {
-            "description": "Apple's key service is unreachable (code APPLE_UNAVAILABLE); retry later",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/auth/refresh": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "operationId": "refreshTokens",
-        "summary": "Rotate a refresh token",
-        "description": "Exchanges a valid refresh token for a new token pair and revokes the presented token.\nPresenting a token that was already rotated revokes every refresh token of the account\n(code REFRESH_REUSED). Rate limited: 20 requests per minute per client address.\n",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "New token pair",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "description": "Unknown, expired or revoked token (INVALID_REFRESH_TOKEN), reuse of a rotated token (REFRESH_REUSED), or deleted account (ACCOUNT_DELETED); the client must sign in again",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/auth/logout": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "operationId": "logout",
-        "summary": "Revoke the presented refresh token (sign out this device)",
-        "description": "Revokes the refresh token if it belongs to the caller. Always succeeds for a valid\nsession, even when the token is already revoked or unknown. Other devices are unaffected.\n",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Signed out"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/factions": {
-      "get": {
-        "tags": [
-          "factions"
-        ],
-        "operationId": "listFactions",
-        "summary": "The three factions with live statistics and the suggested faction",
-        "description": "No session required. Statistics are computed live: members and active members (used the\napp within `activeWindowDays`, not deleted, has a faction) from the player table, hexes\nowned at resolution 9 and 7 from the territory tables (zero until the first reckoning).\n`suggestedFactionId` is the faction with the fewest active members, ties broken by the\nlowest id. Sent with `Cache-Control: public, max-age=60`.\n",
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Factions sorted by `sort`, then `id`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FactionsResponse"
-                },
-                "example": {
-                  "factions": [
-                    {
-                      "id": 1,
-                      "slug": "owls",
-                      "name": "Owls",
-                      "emoji": "🦉",
-                      "colorLight": "#4CAF50",
-                      "colorDark": "#2E7D32",
-                      "sort": 1,
-                      "stats": {
-                        "members": 12,
-                        "activeMembers": 9,
-                        "hexesOwnedR9": 0,
-                        "hexesOwnedR7": 0
-                      }
-                    },
-                    {
-                      "id": 2,
-                      "slug": "foxes",
-                      "name": "Foxes",
-                      "emoji": "🦊",
-                      "colorLight": "#FFC107",
-                      "colorDark": "#FFA000",
-                      "sort": 2,
-                      "stats": {
-                        "members": 10,
-                        "activeMembers": 10,
-                        "hexesOwnedR9": 0,
-                        "hexesOwnedR7": 0
-                      }
-                    },
-                    {
-                      "id": 3,
-                      "slug": "deer",
-                      "name": "Deer",
-                      "emoji": "🦌",
-                      "colorLight": "#2196F3",
-                      "colorDark": "#1976D2",
-                      "sort": 3,
-                      "stats": {
-                        "members": 4,
-                        "activeMembers": 3,
-                        "hexesOwnedR9": 0,
-                        "hexesOwnedR7": 0
-                      }
-                    }
-                  ],
-                  "suggestedFactionId": 3,
-                  "activeWindowDays": 14
-                }
-              }
-            }
-          },
-          "503": {
-            "$ref": "#/components/responses/DbUnavailable"
-          }
-        }
-      }
-    },
-    "/v1/me": {
-      "get": {
-        "tags": [
-          "me"
-        ],
-        "operationId": "getMe",
-        "summary": "The signed-in player's profile",
-        "description": "Includes `suggestedFactionId` so the faction pick screen needs no second call. Never returns the e-mail address.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "me"
-        ],
-        "operationId": "updateMe",
-        "summary": "Update the display name",
-        "description": "The display name is trimmed, must be 2–24 Unicode scalars long and contain no control\ncharacters. Violations answer 400 VALIDATION_FAILED with `details.field = \"displayName\"`\nand `details.rule` in tooShort | tooLong | controlCharacter.\n",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MeUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "me"
-        ],
-        "operationId": "deleteMe",
-        "summary": "Delete the account (30-day grace period)",
-        "description": "Marks the account deleted, revokes every refresh token and schedules erasure 30 days\nlater (`account.purge`). Signing in with the same Apple ID before `purgeAt` restores\nthe account. After this call every request with the old credentials answers 401\nACCOUNT_DELETED.\n",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deletion accepted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountDeletion"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      }
-    },
-    "/v1/me/faction": {
-      "post": {
-        "tags": [
-          "me"
-        ],
-        "operationId": "selectFaction",
-        "summary": "Pick or change the faction",
-        "description": "The first pick is free and starts no lock. Re-selecting the current faction is a no-op.\nA change is allowed when the player has never changed or the previous change is at least\n30 days old; otherwise 409 FACTION_CHANGE_LOCKED with `details.nextChangeAt`. XP and level\nare never altered.\n",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FactionSelect"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated profile (with `factionChangeAvailableAt` and `suggestedFactionId`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "description": "Unknown faction id (code FACTION_NOT_FOUND)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Faction change locked (code FACTION_CHANGE_LOCKED, `details.nextChangeAt` ISO 8601)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": {
-                    "code": "FACTION_CHANGE_LOCKED",
-                    "message": "Faction can be changed once every 30 days",
-                    "details": {
-                      "nextChangeAt": "2026-10-07T10:00:00.000Z"
-                    }
-                  },
-                  "requestId": "6f1c2a4e-0d1e-4f3a-9b1c-1a2b3c4d5e6f"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/me/export": {
-      "get": {
-        "tags": [
-          "me"
-        ],
-        "operationId": "getExport",
-        "summary": "Request or poll the player's data export",
-        "description": "Returns the latest export when it is pending, or ready and not older than 7 days (with a\nfresh `downloadUrl` valid for one hour). Otherwise enqueues a new export (`account.export`)\nand answers 202 with `status: pending`. Clients poll every 5 seconds while pending.\n",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Existing export (pending, ready or failed)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportStatus"
-                },
-                "example": {
-                  "id": "1b6f2d3c-4a5b-4c6d-8e9f-0a1b2c3d4e5f",
-                  "status": "ready",
-                  "requestedAt": "2026-09-07T10:00:00.000Z",
-                  "completedAt": "2026-09-07T10:00:04.000Z",
-                  "expiresAt": "2026-09-14T10:00:04.000Z",
-                  "downloadUrl": "http://localhost:9000/nature-media/exports/…?X-Amz-Signature=…",
-                  "error": null
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "A new export was enqueued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportStatus"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      }
-    }
+    "version": "0.1.0",
+    "description": "Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`)."
   },
   "components": {
     "securitySchemes": {
@@ -484,122 +15,109 @@
       }
     },
     "schemas": {
-      "AuthAppleRequest": {
-        "type": "object",
-        "required": [
-          "identityToken"
-        ],
+      "Error": {
         "additionalProperties": false,
+        "description": "Shared error envelope returned by every non-2xx response. `code` is a stable machine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers, never shown verbatim to players; `details` carries validation issues or other structured context.",
+        "type": "object",
+        "required": ["error", "requestId"],
         "properties": {
-          "identityToken": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 8192,
-            "description": "Apple identity token (JWT) from ASAuthorizationAppleIDCredential.identityToken"
-          },
-          "authorizationCode": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2048,
-            "description": "Apple authorization code; accepted and ignored in feature 002 (used by the token-revocation flow of feature 009)"
-          },
-          "fullName": {
-            "type": "object",
+          "error": {
             "additionalProperties": false,
-            "description": "Present only on the first authorization, when Apple hands the name to the app",
+            "type": "object",
+            "required": ["code", "message"],
             "properties": {
-              "givenName": {
+              "code": {
+                "pattern": "^[A-Z][A-Z0-9_]+$",
                 "type": "string",
-                "maxLength": 100
+                "example": "VALIDATION_FAILED"
               },
-              "familyName": {
-                "type": "string",
-                "maxLength": 100
-              }
+              "message": { "type": "string" },
+              "details": { "additionalProperties": true, "type": "object", "properties": {} }
             }
-          }
-        }
-      },
-      "TokenPair": {
-        "type": "object",
-        "required": [
-          "accessToken",
-          "accessExpiresAt",
-          "refreshToken",
-          "refreshExpiresAt"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "accessToken": {
+          },
+          "requestId": {
+            "description": "Fastify request id, also returned in the `x-request-id` response header",
             "type": "string"
-          },
-          "accessExpiresAt": {
+          }
+        }
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["status", "db", "version"],
+        "properties": {
+          "status": {
+            "description": "ok when every dependency check passed",
             "type": "string",
-            "format": "date-time"
+            "enum": ["ok", "degraded"]
           },
-          "refreshToken": {
+          "db": {
+            "description": "Result of `SELECT 1` against Postgres",
+            "type": "string",
+            "enum": ["ok", "error"]
+          },
+          "version": {
+            "description": "API package version (from apps/api/package.json)",
             "type": "string"
-          },
-          "refreshExpiresAt": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },
-      "AuthResponse": {
-        "type": "object",
-        "required": [
-          "tokens",
-          "me",
-          "isNewUser",
-          "restored"
-        ],
+      "FactionStats": {
         "additionalProperties": false,
+        "type": "object",
+        "required": ["members", "activeMembers", "hexesOwnedR9", "hexesOwnedR7"],
         "properties": {
-          "tokens": {
-            "$ref": "#/components/schemas/TokenPair"
+          "members": {
+            "minimum": 0,
+            "description": "Players with this faction, not deleted",
+            "type": "integer"
           },
-          "me": {
-            "$ref": "#/components/schemas/Me"
+          "activeMembers": {
+            "minimum": 0,
+            "description": "Members who used the app within `activeWindowDays`",
+            "type": "integer"
           },
-          "isNewUser": {
-            "type": "boolean"
-          },
-          "restored": {
-            "type": "boolean",
-            "description": "True when an account marked deleted was reactivated by this sign-in"
-          }
+          "hexesOwnedR9": { "minimum": 0, "type": "integer" },
+          "hexesOwnedR7": { "minimum": 0, "type": "integer" }
         }
       },
-      "RefreshRequest": {
-        "type": "object",
-        "required": [
-          "refreshToken"
-        ],
+      "Faction": {
         "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "slug", "name", "emoji", "colorLight", "colorDark", "sort", "stats"],
         "properties": {
-          "refreshToken": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
-          }
+          "id": { "type": "integer" },
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "emoji": { "type": "string" },
+          "colorLight": { "pattern": "^#[0-9A-Fa-f]{6}$", "type": "string" },
+          "colorDark": { "pattern": "^#[0-9A-Fa-f]{6}$", "type": "string" },
+          "sort": { "type": "integer" },
+          "stats": { "$ref": "#/components/schemas/FactionStats" }
         }
       },
-      "LogoutRequest": {
-        "type": "object",
-        "required": [
-          "refreshToken"
-        ],
+      "FactionsResponse": {
         "additionalProperties": false,
+        "type": "object",
+        "required": ["factions", "suggestedFactionId", "activeWindowDays"],
         "properties": {
-          "refreshToken": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 256
+          "factions": {
+            "description": "Sorted by `sort`, then `id`",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Faction" }
+          },
+          "suggestedFactionId": {
+            "description": "Faction with the fewest active members (tie → lowest id)",
+            "type": "integer"
+          },
+          "activeWindowDays": {
+            "description": "The window used for activeMembers (14)",
+            "type": "integer"
           }
         }
       },
       "Me": {
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -613,110 +131,60 @@
           "createdAt",
           "suggestedFactionId"
         ],
-        "additionalProperties": false,
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "factionId": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "factionChangedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
+          "id": { "format": "uuid", "type": "string" },
+          "displayName": { "type": "string" },
+          "factionId": { "type": ["null", "integer"] },
+          "factionChangedAt": { "format": "date-time", "type": ["null", "string"] },
           "factionChangeAvailableAt": {
-            "type": [
-              "string",
-              "null"
-            ],
             "format": "date-time",
-            "description": "When the next faction change is allowed; null when a change is allowed now (or no faction is set yet)"
+            "description": "When the next faction change is allowed; null when a change is allowed now (or no faction is set yet)",
+            "type": ["null", "string"]
           },
-          "xp": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "level": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "player",
-              "tester",
-              "admin"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
+          "xp": { "minimum": 0, "type": "integer" },
+          "level": { "minimum": 1, "type": "integer" },
+          "role": { "type": "string", "enum": ["player", "tester", "admin"] },
+          "createdAt": { "format": "date-time", "type": "string" },
           "suggestedFactionId": {
-            "type": "integer",
-            "description": "Faction with the fewest active members (tie → lowest id)"
+            "description": "Faction with the fewest active members (tie → lowest id)",
+            "type": "integer"
           }
         }
       },
       "MeUpdate": {
-        "type": "object",
-        "required": [
-          "displayName"
-        ],
         "additionalProperties": false,
+        "type": "object",
+        "required": ["displayName"],
         "properties": {
           "displayName": {
-            "type": "string",
             "minLength": 1,
             "maxLength": 64,
-            "description": "Validated by the service to 2–24 Unicode scalars after trimming, no control characters"
+            "description": "Validated by the service to 2–24 Unicode scalars after trimming, no control characters",
+            "type": "string"
           }
         }
       },
       "FactionSelect": {
-        "type": "object",
-        "required": [
-          "factionId"
-        ],
         "additionalProperties": false,
-        "properties": {
-          "factionId": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 32767
-          }
-        }
+        "type": "object",
+        "required": ["factionId"],
+        "properties": { "factionId": { "minimum": 1, "maximum": 32767, "type": "integer" } }
       },
       "AccountDeletion": {
-        "type": "object",
-        "required": [
-          "deletedAt",
-          "purgeAt"
-        ],
         "additionalProperties": false,
+        "type": "object",
+        "required": ["deletedAt", "purgeAt"],
         "properties": {
-          "deletedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
+          "deletedAt": { "format": "date-time", "type": "string" },
           "purgeAt": {
-            "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "When the erasure job runs (deletedAt + 30 days)",
+            "type": "string"
           }
         }
       },
       "ExportStatus": {
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
@@ -727,250 +195,448 @@
           "downloadUrl",
           "error"
         ],
-        "additionalProperties": false,
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "ready",
-              "failed"
-            ]
-          },
-          "requestedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "completedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
+          "id": { "format": "uuid", "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "ready", "failed"] },
+          "requestedAt": { "format": "date-time", "type": "string" },
+          "completedAt": { "format": "date-time", "type": ["null", "string"] },
+          "expiresAt": { "format": "date-time", "type": ["null", "string"] },
           "downloadUrl": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Presigned GET URL, valid for one hour; only when status is ready"
+            "description": "Presigned GET URL, valid for one hour; only when status is ready",
+            "type": ["null", "string"]
           },
-          "error": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
+          "error": { "type": ["null", "string"] }
         }
       },
-      "FactionStats": {
-        "type": "object",
-        "required": [
-          "members",
-          "activeMembers",
-          "hexesOwnedR9",
-          "hexesOwnedR7"
-        ],
+      "AuthAppleRequest": {
         "additionalProperties": false,
-        "properties": {
-          "members": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "activeMembers": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "hexesOwnedR9": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "hexesOwnedR7": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
-      },
-      "Faction": {
         "type": "object",
-        "required": [
-          "id",
-          "slug",
-          "name",
-          "emoji",
-          "colorLight",
-          "colorDark",
-          "sort",
-          "stats"
-        ],
-        "additionalProperties": false,
+        "required": ["identityToken"],
         "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "slug": {
+          "identityToken": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "description": "Apple identity token (JWT) from ASAuthorizationAppleIDCredential.identityToken",
             "type": "string"
           },
-          "name": {
+          "authorizationCode": {
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Apple authorization code; accepted and ignored in feature 002 (used by the token-revocation flow of feature 009)",
             "type": "string"
           },
-          "emoji": {
-            "type": "string"
-          },
-          "colorLight": {
-            "type": "string",
-            "pattern": "^#[0-9A-Fa-f]{6}$"
-          },
-          "colorDark": {
-            "type": "string",
-            "pattern": "^#[0-9A-Fa-f]{6}$"
-          },
-          "sort": {
-            "type": "integer"
-          },
-          "stats": {
-            "$ref": "#/components/schemas/FactionStats"
-          }
-        }
-      },
-      "FactionsResponse": {
-        "type": "object",
-        "required": [
-          "factions",
-          "suggestedFactionId",
-          "activeWindowDays"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "factions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Faction"
-            }
-          },
-          "suggestedFactionId": {
-            "type": "integer"
-          },
-          "activeWindowDays": {
-            "type": "integer",
-            "description": "The window used for activeMembers (14)"
-          }
-        }
-      },
-      "Error": {
-        "type": "object",
-        "description": "Shared error envelope returned by every non-2xx response (feature 001). `code` is a stable\nmachine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers, never\nshown verbatim to players; `details` carries structured context.\n",
-        "required": [
-          "error",
-          "requestId"
-        ],
-        "additionalProperties": false,
-        "properties": {
-          "error": {
-            "type": "object",
-            "required": [
-              "code",
-              "message"
-            ],
+          "fullName": {
             "additionalProperties": false,
+            "description": "Present only on the first authorization, when Apple hands the name to the app",
+            "type": "object",
             "properties": {
-              "code": {
-                "type": "string",
-                "pattern": "^[A-Z][A-Z0-9_]+$",
-                "examples": [
-                  "VALIDATION_FAILED",
-                  "NOT_FOUND",
-                  "INTERNAL_ERROR",
-                  "DB_UNAVAILABLE",
-                  "UNAUTHORIZED",
-                  "TOKEN_EXPIRED",
-                  "ACCOUNT_DELETED",
-                  "INVALID_APPLE_TOKEN",
-                  "APPLE_UNAVAILABLE",
-                  "INVALID_REFRESH_TOKEN",
-                  "REFRESH_REUSED",
-                  "FORBIDDEN",
-                  "FACTION_NOT_FOUND",
-                  "FACTION_CHANGE_LOCKED",
-                  "RATE_LIMITED"
-                ]
-              },
-              "message": {
-                "type": "string"
-              },
-              "details": {
-                "type": "object",
-                "additionalProperties": true
+              "givenName": { "maxLength": 100, "type": "string" },
+              "familyName": { "maxLength": 100, "type": "string" }
+            }
+          }
+        }
+      },
+      "TokenPair": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["accessToken", "accessExpiresAt", "refreshToken", "refreshExpiresAt"],
+        "properties": {
+          "accessToken": { "type": "string" },
+          "accessExpiresAt": { "format": "date-time", "type": "string" },
+          "refreshToken": { "type": "string" },
+          "refreshExpiresAt": { "format": "date-time", "type": "string" }
+        }
+      },
+      "AuthResponse": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["tokens", "me", "isNewUser", "restored"],
+        "properties": {
+          "tokens": { "$ref": "#/components/schemas/TokenPair" },
+          "me": { "$ref": "#/components/schemas/Me" },
+          "isNewUser": { "type": "boolean" },
+          "restored": {
+            "description": "True when an account marked deleted was reactivated by this sign-in",
+            "type": "boolean"
+          }
+        }
+      },
+      "RefreshRequest": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": { "refreshToken": { "minLength": 1, "maxLength": 256, "type": "string" } }
+      },
+      "LogoutRequest": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": { "refreshToken": { "minLength": 1, "maxLength": 256, "type": "string" } }
+      }
+    }
+  },
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "summary": "The OpenAPI 3.1 document describing this server",
+        "tags": ["ops"],
+        "description": "Generated at startup from the registered routes` TypeBox schemas. Snapshotted into packages/api-schema/openapi.json, from which the iOS client is generated.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "required": ["openapi", "info", "paths", "components"],
+                  "properties": {
+                    "openapi": { "pattern": "^3\\.1\\.\\d+$", "type": "string" },
+                    "info": { "additionalProperties": true, "type": "object", "properties": {} },
+                    "paths": { "additionalProperties": true, "type": "object", "properties": {} },
+                    "components": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
               }
             }
-          },
-          "requestId": {
-            "type": "string",
-            "description": "Fastify request id, also returned in the `x-request-id` response header"
           }
         }
       }
     },
-    "responses": {
-      "BadRequest": {
-        "description": "Request validation failed (code VALIDATION_FAILED)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness and database readiness",
+        "tags": ["ops"],
+        "description": "Runs `SELECT 1` against Postgres with a 2 s timeout. Returns 200 when the database answers, 503 with `db: \"error\"` otherwise. Never requires authentication.",
+        "responses": {
+          "200": {
+            "description": "API and database are reachable",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } }
+            }
+          },
+          "503": {
+            "description": "API is up but the database is not reachable",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } }
             }
           }
         }
-      },
-      "Unauthorized": {
-        "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "RateLimited": {
-        "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
-        "headers": {
-          "retry-after": {
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Seconds to wait before retrying"
+      }
+    },
+    "/v1/auth/apple": {
+      "post": {
+        "operationId": "signInWithApple",
+        "summary": "Sign in (or up) with an Apple identity token",
+        "tags": ["auth"],
+        "description": "Verifies `identityToken` against Apple's JWKS (issuer `https://appleid.apple.com`, audience = the app's bundle identifier(s)), then creates or resumes the account keyed by Apple's `sub`. E-mail and `fullName` are stored only when the account is created; later calls ignore them. An account marked deleted within the last 30 days is restored (`restored: true`). Rate limited: 20 requests per minute per client address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthAppleRequest" } }
           }
         },
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Tokens for the (new or existing) account and the player's profile",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
+            }
+          },
+          "400": {
+            "description": "Request validation failed (code VALIDATION_FAILED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "The identity token is invalid (code INVALID_APPLE_TOKEN, `details.reason` in expired | audience | issuer | signature | malformed)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "503": {
+            "description": "Apple's key service is unreachable (code APPLE_UNAVAILABLE); retry later",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "operationId": "refreshTokens",
+        "summary": "Rotate a refresh token",
+        "tags": ["auth"],
+        "description": "Exchanges a valid refresh token for a new token pair and revokes the presented token. Presenting a token that was already rotated revokes every refresh token of the account (code REFRESH_REUSED). Rate limited: 20 requests per minute per client address.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/RefreshRequest" } }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "New token pair",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TokenPair" } }
+            }
+          },
+          "400": {
+            "description": "Request validation failed (code VALIDATION_FAILED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Unknown, expired or revoked token (INVALID_REFRESH_TOKEN), reuse of a rotated token (REFRESH_REUSED), or deleted account (ACCOUNT_DELETED); the client must sign in again",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Revoke the presented refresh token (sign out this device)",
+        "tags": ["auth"],
+        "description": "Revokes the refresh token if it belongs to the caller. Always succeeds for a valid session, even when the token is already revoked or unknown. Other devices are unaffected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/LogoutRequest" } }
+          }
+        },
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "204": { "description": "Signed out" },
+          "400": {
+            "description": "Request validation failed (code VALIDATION_FAILED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/factions": {
+      "get": {
+        "operationId": "listFactions",
+        "summary": "The three factions with live statistics and the suggested faction",
+        "tags": ["factions"],
+        "description": "No session required. Statistics are computed live: members and active members (used the app within `activeWindowDays`, not deleted, has a faction) from the player table, hexes owned at resolution 9 and 7 from the territory tables (zero until the first reckoning). `suggestedFactionId` is the faction with the fewest active members, ties broken by the lowest id. Sent with `Cache-Control: public, max-age=60`.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Factions sorted by `sort`, then `id`",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/FactionsResponse" } }
+            }
+          },
+          "503": {
+            "description": "Database not reachable (code DB_UNAVAILABLE)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "The signed-in player's profile",
+        "tags": ["me"],
+        "description": "Includes `suggestedFactionId` so the faction pick screen needs no second call. Never returns the e-mail address.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Profile",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
       },
-      "DbUnavailable": {
-        "description": "Database not reachable (code DB_UNAVAILABLE)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
+      "patch": {
+        "operationId": "updateMe",
+        "summary": "Update the display name",
+        "tags": ["me"],
+        "description": "The display name is trimmed, must be 2–24 Unicode scalars long and contain no control characters. Violations answer 400 VALIDATION_FAILED with `details.field = \"displayName\"` and `details.rule` in tooShort | tooLong | controlCharacter.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/MeUpdate" } }
+          }
+        },
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Updated profile",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
+          },
+          "400": {
+            "description": "Request validation failed (code VALIDATION_FAILED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMe",
+        "summary": "Delete the account (30-day grace period)",
+        "tags": ["me"],
+        "description": "Marks the account deleted, revokes every refresh token and schedules erasure 30 days later (`account.purge`). Signing in with the same Apple ID before `purgeAt` restores the account. After this call every request with the old credentials answers 401 ACCOUNT_DELETED.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Deletion accepted",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AccountDeletion" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/faction": {
+      "post": {
+        "operationId": "selectFaction",
+        "summary": "Pick or change the faction",
+        "tags": ["me"],
+        "description": "The first pick is free and starts no lock. Re-selecting the current faction is a no-op. A change is allowed when the player has never changed or the previous change is at least 30 days old; otherwise 409 FACTION_CHANGE_LOCKED with `details.nextChangeAt`. XP and level are never altered.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/FactionSelect" } }
+          }
+        },
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Updated profile (with `factionChangeAvailableAt` and `suggestedFactionId`)",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
+          },
+          "400": {
+            "description": "Request validation failed (code VALIDATION_FAILED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "404": {
+            "description": "Unknown faction id (code FACTION_NOT_FOUND)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "409": {
+            "description": "Faction change locked (code FACTION_CHANGE_LOCKED, `details.nextChangeAt` ISO 8601)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/export": {
+      "get": {
+        "operationId": "getExport",
+        "summary": "Request or poll the player's data export",
+        "tags": ["me"],
+        "description": "Returns the latest export when it is pending, ready and not older than 7 days (with a fresh `downloadUrl` valid for one hour), or failed less than a minute ago (so the failure is visible). Otherwise enqueues a new export (`account.export`) and answers 202 with `status: pending`. Clients poll every 5 seconds while pending.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Existing export (pending, ready or failed)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ExportStatus" } }
+            }
+          },
+          "202": {
+            "description": "A new export was enqueued",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ExportStatus" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
       }
     }
-  }
+  },
+  "servers": [{ "url": "http://localhost:3000", "description": "Local development (make dev)" }],
+  "tags": [
+    { "name": "ops", "description": "Health and introspection" },
+    {
+      "name": "auth",
+      "description": "Sign in with Apple, token refresh, logout (rate limited per client address)"
+    },
+    {
+      "name": "factions",
+      "description": "The three factions with live statistics and the suggested faction"
+    },
+    { "name": "me", "description": "The signed-in player's profile, faction, deletion and export" }
+  ]
 }

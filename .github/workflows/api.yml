@@ -1,4 +1,5 @@
-# API and packages CI (specs/001-repo-foundations/tasks.md T027, research.md R8).
+# API, packages and Swift-package CI (specs/001-repo-foundations/tasks.md T027, research.md R8;
+# specs/002-auth-and-factions/tasks.md T030).
 #
 # Validation note: GitHub Actions cannot run in the authoring container, so this workflow was
 # validated by parsing it with `yq` and by checking every step against the documented inputs of
@@ -10,7 +11,20 @@
 # Root scripts (package.json): `pnpm lint` = turbo lint + `prettier --check .`; `pnpm typecheck`;
 # `pnpm test` = `SKIP_DB_TESTS=1 turbo run test` (unit only); `pnpm test:db` = turbo test with the
 # DB integration suites (needs DATABASE_URL or Docker). The `api` job calls the package script
-# directly with DATABASE_URL pointing at the image built from infra/docker/postgres.
+# directly with DATABASE_URL pointing at the image built from infra/docker/postgres. The auth
+# variables (JWT_SECRET, APPLE_CLIENT_IDS, APPLE_JWKS_URL) are set by apps/api/test/helpers/app.ts,
+# so no job exports them.
+#
+# `@nature/api-schema` (packages/*) devDepends on `@nature/api`: its snapshot test boots the API's
+# `openapi:print`, so the `rules` job builds `@nature/api` and its workspace dependencies first
+# (turbo's `test` task depends on `^build`, the explicit step makes the order visible in the log).
+#
+# The `swift` job runs `swift test` in every Swift package that builds on Linux inside the official
+# swift:6.2.1 container (pinned; matches the toolchain recorded in apps/ios/VERIFY.md).
+# macOS-only, NOT covered here: the app target `NatureExplorer` (xcodegen + xcodebuild), the
+# `MapFeature` package (MapLibre iOS binary), and the SwiftUI / AuthenticationServices / Security
+# sources of DesignSystem, AuthFeature, FactionsFeature and ProfileFeature, which sit behind
+# `#if canImport(...)` and are only type-checked by Xcode Cloud (apps/ios/ci_scripts/ci_post_clone.sh).
 name: api
 
 on:
@@ -44,7 +58,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Lint (every workspace) and Prettier
         run: pnpm lint
-      - name: Typecheck and test the shared packages
+      - name: Build @nature/api and its dependencies (needed by the @nature/api-schema snapshot test)
+        run: pnpm turbo run build --filter=@nature/api-schema...
+      - name: Typecheck and test the shared packages (incl. the OpenAPI snapshot and its iOS copy)
         run: pnpm turbo run typecheck test --filter='./packages/*'
 
   api:
@@ -96,3 +112,38 @@ jobs:
       - run: pnpm turbo run lint typecheck --filter=@nature/api
       - name: API tests (unit + integration against the built image)
         run: pnpm --filter @nature/api test
+
+  swift:
+    name: swift (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: swift:6.2.1-noble
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux-buildable packages only; see the header comment for what stays macOS-only.
+        package:
+          - H3Kit
+          - TerritoryRules
+          - Core
+          - DesignSystem
+          - AuthFeature
+          - FactionsFeature
+          - ProfileFeature
+          - APIClient
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift --version
+        run: swift --version
+      - name: swift test
+        working-directory: apps/ios/Packages/${{ matrix.package }}
+        # APIClient resolves swift-openapi-generator/runtime/urlsession from GitHub and runs the
+        # generator as a build plugin; its generated code carries the generator's own warnings, so it
+        # is the one package built without -warnings-as-errors.
+        run: |
+          if [ "${{ matrix.package }}" = "APIClient" ]; then
+            swift test
+          else
+            swift test -Xswiftc -warnings-as-errors
+          fi

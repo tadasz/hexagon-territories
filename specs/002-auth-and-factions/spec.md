@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-07
 
-**Status**: Draft
+**Status**: Implemented on Linux (API, Swift packages, docs, CI) — macOS, Docker and owner follow-ups open in `tasks.md` Phase 4 (T032–T035); becomes `Implemented` when they close
 
 **Input**: User description: "Sign in with Apple, JWT sessions, faction pick with smallest-faction suggestion, profile, account deletion and export"
 

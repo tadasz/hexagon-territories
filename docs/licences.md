@@ -19,6 +19,9 @@ Every model, dataset, tile source, reference recording and species image must be
 | ONNX Runtime | MIT | — | approved |
 | GRDB | MIT | — | approved |
 | XcodeGen (tooling, generates the Xcode project; not shipped) | MIT | — | approved |
+| swift-openapi-runtime and swift-openapi-urlsession (Apple; the generated API client's runtime and URLSession transport, ship in the app) | Apache 2.0 | — | approved (feature 002) |
+| swift-http-types (Apple; transitive dependency of the OpenAPI runtime, ships in the app) | Apache 2.0 | — | approved (feature 002) |
+| swift-openapi-generator (Apple; SwiftPM build plugin that generates the client from `packages/api-schema/openapi.json`; not shipped) | Apache 2.0 | — | approved (feature 002) |
 
 ## Inquiry log
 

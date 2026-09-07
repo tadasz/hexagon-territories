@@ -29,7 +29,7 @@ that does not import SwiftUI, UIKit, AuthenticationServices, Security or MapLibr
 
 ```bash
 cd apps/ios
-./scripts/sync-openapi.sh                          # after Stream A/C: replaces the temporary openapi.json (see below)
+./scripts/sync-openapi.sh                          # no-op unless the snapshot changed (Stream C synced it; see below)
 cd Packages/Core && swift test && cd ../..         # should reproduce the Linux result (66 tests)
 cd Packages/APIClient && swift test && cd ../..    # generator plugin runs during the build; 13 tests
 cd Packages/AuthFeature && swift test && cd ../..  # 6 tests; now also type-checks SignInView / KeychainStore / AppleCredentialMapping
@@ -66,16 +66,17 @@ Things a macOS run may surface that could not be checked here:
 - **`Date.ISO8601FormatStyle`** on Apple platforms (iOS 15+): `JSONCoding.parseISO8601` accepts both `…04.000Z` and
   `…04Z`; the same helper backs `APIClient.LenientISO8601DateTranscoder`.
 
-### Temporary `openapi.json` (T020) — action for Stream C
+### Stream C (2026-09-07) — real snapshot synced, every Linux package re-run
 
-`Packages/APIClient/Sources/APIClient/openapi.json` was generated from
-`specs/002-auth-and-factions/contracts/openapi.yaml` (`scripts/sync-openapi.sh --from-contract`) because
-`packages/api-schema/openapi.json` (Stream A, T014) did not exist yet. Its `info["x-source"]` says so. Stream C (T028)
-replaces it with `apps/ios/scripts/sync-openapi.sh` after `pnpm --filter @nature/api-schema snapshot`; the equality test
-in `@nature/api-schema` then covers it. The generated Swift names the adapters use (`Operations.SignInWithApple.Output`
-`.ok/.undocumented`, `Components.Schemas.Me.RolePayload`, `ExportStatus.StatusPayload`, `_Error`) come from the
-contract's `operationId`s and schema names, which the snapshot must keep (Stream A's TypeBox `$id`s match
-`data-model.md` §2).
+`Packages/APIClient/Sources/APIClient/openapi.json` is now the byte-for-byte copy of `packages/api-schema/openapi.json`
+(`apps/ios/scripts/sync-openapi.sh` after `pnpm --filter @nature/api-schema test` confirmed the snapshot is current; the
+equality test in `@nature/api-schema` is no longer skipped). The snapshot adds `/health`, `/openapi.json` and
+`HealthResponse` to the contract fragment and keeps every `operationId` and schema name, so no adapter changed. With the
+real document the generator ran again on Linux (Swift 6.2.1, `swift-openapi-generator` 1.13.1) and every package passed
+with the same counts as above: `APIClient` 13, `Core` 66, `AuthFeature` 6, `FactionsFeature` 9, `ProfileFeature` 13,
+`DesignSystem` 1, `H3Kit` 21, `TerritoryRules` 29 tests, 0 failures. `.build` directories and the Linux-generated
+`Package.resolved` were deleted again; the first macOS resolution commits `Package.resolved` (tasks.md Convergence).
+CI job `swift` (`.github/workflows/api.yml`) now runs the same eight packages in the `swift:6.2.1-noble` container.
 
 ### Notes for Stream C
 

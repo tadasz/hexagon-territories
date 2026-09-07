@@ -99,11 +99,11 @@ The job is idempotent per week: re-running for W is a no-op.
 
 | Rule | Default |
 |---|---|
-| Faction switch | once per 30 days; XP kept; past contributions stay with the old faction |
+| Faction switch | once per 30 days; the first pick after sign-up is free and the first change starts the 30-day lock (`factionChangeAvailableAt`); XP kept; past contributions stay with the old faction |
 | Streak | one finished walk ≥ 500 m or one verified capture per local day (the player's own time zone, `streaks.tz`; streaks are the only rule that uses local time — weeks and reckonings use UTC); one freeze per 7-day streak |
 | Player XP for captures | bird 30, plant 20, first-of-species +50, rarity multiplier ×1 / ×1.5 / ×2 / ×3 |
 | Levels | XP threshold for level L = `100 × L^1.6` |
-| Balance | at sign-up the app pre-selects the faction with the fewest active players (the player may pick another). No underdog multiplier in the MVP; a multiplier is a post-launch idea (`docs/roadmap.md`) |
+| Balance | at sign-up the app pre-selects the faction with the fewest active players (the player may pick another); active = used the app in the last 14 days (`last_seen_at`), deleted accounts excluded; tie → lowest faction id. No underdog multiplier in the MVP; a multiplier is a post-launch idea (`docs/roadmap.md`) |
 
 ## Constants summary
 

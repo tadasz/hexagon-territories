@@ -102,14 +102,16 @@ Viewfinder or `PhotosPicker`, organ chips (leaf/flower/fruit/bark) → 1280 px J
 
 **Fastify modules**: `auth`, `users`, `factions`, `walks`, `territory` (reckoning, hex reads, tiles), `captures`, `species`, `collection`, `leaderboards`, `push`, `admin`. Rules are imported from `packages/territory-rules`.
 
-**Jobs (pg-boss)**: `walk.autofinish` (hourly), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (daily, > 30 days), `push.send`, `species_mask.refresh` (weekly).
+**Jobs (pg-boss)**: `account.purge` (30 days after `DELETE /v1/me`, idempotent purge registry), `account.export` (data bundle to object storage), `walk.autofinish` (hourly), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (daily, > 30 days), `push.send`, `species_mask.refresh` (weekly).
 
 **REST, JSON, `/v1`, OpenAPI generated**
 
 ```
-POST /v1/auth/apple                  → tokens + user;   POST /v1/auth/refresh
-DELETE /v1/me (30-day grace);         GET /v1/me/export
-GET  /v1/factions;                    POST /v1/me/faction (once per 30 days)
+POST /v1/auth/apple                  → tokens + me;     POST /v1/auth/refresh (rotating);   POST /v1/auth/logout
+GET  /v1/me;                          PATCH /v1/me {displayName}
+DELETE /v1/me (30-day grace);         GET /v1/me/export (enqueues account.export on first call → 202 pending,
+                                        then 200 ready with a presigned URL valid 1 h; bundle kept 7 days)
+GET  /v1/factions (public, cached 60 s); POST /v1/me/faction (first pick free, then once per 30 days)
 
 POST /v1/walks                       {clientWalkId, startedAt, deviceInfo} → {walkId}
 POST /v1/walks/{id}/samples          {samples:[{seq,ts,lat,lon,hAcc,speed,course,alt}], pedometer} → {accepted, rejected}
@@ -151,6 +153,8 @@ users(id uuid pk, apple_sub unique, email, display_name, faction_id fk, faction_
       role 'player|tester|admin', created_at, last_seen_at, deleted_at)
 refresh_tokens(id uuid pk, user_id fk cascade, token_hash bytea unique, expires_at, revoked_at, device_id)
 devices(id uuid pk, user_id fk cascade, apns_token unique, app_version, os_version, model, attested bool, updated_at)
+account_exports(id uuid pk, user_id fk cascade, status 'pending|ready|failed', object_key, requested_at, completed_at,
+      expires_at, error)                                   -- feature 002; bundle in object storage under exports/, 7-day lifecycle
 
 walk_sessions(id uuid pk, user_id fk, client_walk_id uuid, faction_id, started_at, ended_at, finished_at,
       status 'active|finished|flagged|abandoned', week_id text, distance_m, duration_s, steps,
