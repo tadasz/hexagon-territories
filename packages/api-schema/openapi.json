@@ -3,7 +3,7 @@
   "info": {
     "title": "Nature Explorer API",
     "version": "0.1.0",
-    "description": "Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`). Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md \"Scoring at walk finish\"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons never changes here (feature 004)."
+    "description": "Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*`, `/v1/hexes*`, `/v1/reckonings/*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`); `/v1/admin/*` additionally needs role `admin`. Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md \"Scoring at walk finish\"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons changes only inside the `reckoning.weekly` job (docs/territory-rules.md \"Weekly reckoning\") — the hex and reckoning endpoints read its results, the admin endpoint triggers it."
   },
   "components": {
     "securitySchemes": {
@@ -530,8 +530,24 @@
             "items": { "$ref": "#/components/schemas/WalkHex" }
           },
           "path": {
-            "oneOf": [{ "$ref": "#/components/schemas/LineString" }, { "type": "null" }],
-            "description": "Simplified accepted path; null while active or with fewer than two accepted samples"
+            "type": ["null", "object"],
+            "additionalProperties": false,
+            "required": ["type", "coordinates"],
+            "properties": {
+              "type": { "type": "string", "enum": ["LineString"] },
+              "coordinates": {
+                "minItems": 2,
+                "description": "GeoJSON positions [lon, lat]",
+                "type": "array",
+                "items": {
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "type": "array",
+                  "items": { "type": "number" }
+                }
+              }
+            },
+            "description": "Simplified accepted path; null while active or with fewer than two accepted samples. Same shape as #/components/schemas/LineString, written inline as a nullable object for the generated clients."
           }
         }
       },
@@ -582,6 +598,372 @@
         "properties": {
           "items": { "type": "array", "items": { "$ref": "#/components/schemas/WalkListItem" } },
           "nextCursor": { "type": ["null", "string"] }
+        }
+      },
+      "HexListItem": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["h3", "res", "owner", "ownerSince", "pressureLeader", "contested"],
+        "properties": {
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "res": { "minimum": 5, "maximum": 9, "type": "integer" },
+          "owner": {
+            "description": "Faction owning the hexagon after the last reckoning",
+            "type": ["null", "integer"]
+          },
+          "ownerSince": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "Week the current owner took the cell; null when unclaimed or for res 5–8",
+            "type": ["null", "string"]
+          },
+          "pressureLeader": {
+            "description": "Faction leading strength × 0.5 + this week's capped metres + bonuses (ties → lowest id); null when nobody has anything or for res 5–8",
+            "type": ["null", "integer"]
+          },
+          "contested": {
+            "description": "pressureLeader exists and differs from owner (always false for res 5–8)",
+            "type": "boolean"
+          }
+        }
+      },
+      "HexList": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "res", "items"],
+        "properties": {
+          "weekId": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "The current week the pressure was computed for",
+            "type": "string"
+          },
+          "res": { "minimum": 5, "maximum": 9, "type": "integer" },
+          "items": {
+            "maxItems": 3000,
+            "description": "Sorted by h3 ascending",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexListItem" }
+          }
+        }
+      },
+      "FactionStrength": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["factionId", "strength"],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "strength": { "minimum": 0, "type": "number" }
+        }
+      },
+      "HexWeekFaction": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["factionId", "cappedMeters", "bonusMeters", "score"],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "cappedMeters": { "minimum": 0, "type": "number" },
+          "bonusMeters": { "minimum": 0, "type": "number" },
+          "score": {
+            "minimum": 0,
+            "description": "strength × 0.5 + cappedMeters + bonusMeters",
+            "type": "number"
+          }
+        }
+      },
+      "HexWeek": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "factions", "pressureLeader", "contested"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "factions": {
+            "description": "Sorted by factionId; factions with nothing this week and no strength are omitted",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexWeekFaction" }
+          },
+          "pressureLeader": { "type": ["null", "integer"] },
+          "contested": { "type": "boolean" }
+        }
+      },
+      "HexCaptain": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["userId", "displayName"],
+        "properties": {
+          "userId": { "format": "uuid", "type": "string" },
+          "displayName": { "type": "string" }
+        }
+      },
+      "HexMe": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["meters", "cappedMeters", "explored", "flipped", "held"],
+        "properties": {
+          "meters": {
+            "minimum": 0,
+            "description": "The caller's raw metres in the cell this week",
+            "type": "number"
+          },
+          "cappedMeters": { "minimum": 0, "type": "number" },
+          "explored": {
+            "description": "The caller has metres in the cell in any week",
+            "type": "boolean"
+          },
+          "flipped": {
+            "description": "The caller's metres were part of a reckoning that flipped the cell to their faction",
+            "type": "boolean"
+          },
+          "held": { "description": "The caller is the current captain", "type": "boolean" }
+        }
+      },
+      "HexReckoningEntry": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "owner", "flipped", "from", "to", "strengths", "captain"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "owner": { "type": ["null", "integer"] },
+          "flipped": { "type": "boolean" },
+          "from": { "type": ["null", "integer"] },
+          "to": { "type": ["null", "integer"] },
+          "strengths": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionStrength" }
+          },
+          "captain": {
+            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
+          }
+        }
+      },
+      "HexDetail": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "h3",
+          "owner",
+          "ownerSince",
+          "captain",
+          "strengths",
+          "week",
+          "me",
+          "reckonings",
+          "captures"
+        ],
+        "properties": {
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "owner": { "type": ["null", "integer"] },
+          "ownerSince": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
+          "captain": {
+            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
+          },
+          "strengths": {
+            "description": "Sorted by factionId",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionStrength" }
+          },
+          "week": { "$ref": "#/components/schemas/HexWeek" },
+          "me": { "$ref": "#/components/schemas/HexMe" },
+          "reckonings": {
+            "maxItems": 8,
+            "description": "Newest first",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexReckoningEntry" }
+          },
+          "captures": {
+            "description": "Always empty in feature 004; feature 006 defines the item schema",
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "FactionTotal": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "factionId",
+          "hexesOwnedR9",
+          "hexesOwnedR7",
+          "meters",
+          "activeUsers",
+          "captures",
+          "flipsGained",
+          "flipsLost"
+        ],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "hexesOwnedR9": { "minimum": 0, "type": "integer" },
+          "hexesOwnedR7": { "minimum": 0, "type": "integer" },
+          "meters": {
+            "minimum": 0,
+            "description": "Capped walking metres the faction earned in the week",
+            "type": "number"
+          },
+          "activeUsers": { "minimum": 0, "type": "integer" },
+          "captures": { "minimum": 0, "type": "integer" },
+          "flipsGained": { "minimum": 0, "type": "integer" },
+          "flipsLost": { "minimum": 0, "type": "integer" }
+        }
+      },
+      "ReckoningLatest": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "ranAt",
+          "nextAt",
+          "inProgress",
+          "factionTotals",
+          "myFlips",
+          "myFlippedHexes"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
+          "ranAt": { "format": "date-time", "type": ["null", "string"] },
+          "nextAt": {
+            "format": "date-time",
+            "description": "Next Monday 00:00 UTC after now",
+            "type": "string"
+          },
+          "inProgress": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "Week id of a reckoning currently running, if any",
+            "type": ["null", "string"]
+          },
+          "factionTotals": {
+            "description": "Sorted by factionId; empty before the first reckoning",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionTotal" }
+          },
+          "myFlips": {
+            "minimum": 0,
+            "description": "Cells the caller helped flip to their faction in that week",
+            "type": "integer"
+          },
+          "myFlippedHexes": {
+            "maxItems": 200,
+            "description": "Sorted by h3",
+            "type": "array",
+            "items": { "pattern": "^[0-9a-f]{15}$", "type": "string" }
+          }
+        }
+      },
+      "ReckoningRunRequest": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "dryRun": {
+            "default": false,
+            "description": "Compute and report the flips without writing anything; requires sync",
+            "type": "boolean"
+          },
+          "sync": {
+            "default": false,
+            "description": "Run inside the request and answer the result instead of enqueuing the job",
+            "type": "boolean"
+          }
+        }
+      },
+      "FlipPreview": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["h3", "from", "to"],
+        "properties": {
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "from": { "type": ["null", "integer"] },
+          "to": { "type": ["null", "integer"] }
+        }
+      },
+      "ReckoningRunResult": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "dryRun",
+          "status",
+          "resumed",
+          "hexesProcessed",
+          "flips",
+          "parentFlips",
+          "walksAutofinished",
+          "staleWalksSkipped",
+          "pushQueued",
+          "leaderboardRows",
+          "durationMs",
+          "startedAt",
+          "finishedAt",
+          "flipsPreview"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "dryRun": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["done"] },
+          "resumed": {
+            "description": "The run continued an earlier interrupted run of the same week",
+            "type": "boolean"
+          },
+          "hexesProcessed": { "minimum": 0, "type": "integer" },
+          "flips": { "minimum": 0, "type": "integer" },
+          "parentFlips": { "minimum": 0, "type": "integer" },
+          "walksAutofinished": { "minimum": 0, "type": "integer" },
+          "staleWalksSkipped": {
+            "minimum": 0,
+            "description": "Dry run only — stale walks a real run would have finished first",
+            "type": "integer"
+          },
+          "pushQueued": { "minimum": 0, "type": "integer" },
+          "leaderboardRows": { "minimum": 0, "type": "integer" },
+          "durationMs": { "minimum": 0, "type": "integer" },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "finishedAt": { "format": "date-time", "type": "string" },
+          "flipsPreview": {
+            "maxItems": 1000,
+            "description": "Dry run only; empty for a real run",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FlipPreview" }
+          }
+        }
+      },
+      "ReckoningQueued": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "status", "jobId"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "status": { "type": "string", "enum": ["queued"] },
+          "jobId": { "type": "string" }
+        }
+      },
+      "ReckoningStatus": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "status",
+          "stage",
+          "attempt",
+          "startedAt",
+          "finishedAt",
+          "hexesProcessed",
+          "flips",
+          "parentFlips",
+          "batches",
+          "walksAutofinished",
+          "pushQueued",
+          "error"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "status": { "type": "string", "enum": ["running", "done", "failed"] },
+          "stage": { "type": "string", "enum": ["walks", "cells", "rollup", "push", "done"] },
+          "attempt": { "minimum": 1, "type": "integer" },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "finishedAt": { "format": "date-time", "type": ["null", "string"] },
+          "hexesProcessed": { "type": "integer" },
+          "flips": { "type": "integer" },
+          "parentFlips": { "type": "integer" },
+          "batches": { "type": "integer" },
+          "walksAutofinished": { "type": "integer" },
+          "pushQueued": { "type": "integer" },
+          "error": { "type": ["null", "string"] }
         }
       }
     }
@@ -1182,6 +1564,232 @@
           }
         }
       }
+    },
+    "/v1/hexes": {
+      "get": {
+        "operationId": "listHexes",
+        "summary": "Hexagons of one resolution inside a bounding box",
+        "tags": ["territory"],
+        "description": "Returns every hexagon of resolution `res` (5–9) that has a state row and whose polygon intersects `bbox`, sorted by cell id. Res 9 rows carry the owner from the last reckoning and this week's pressure read model (`pressureLeader`, `contested`); res 5–8 rows come from the materialised parent state and carry `pressureLeader: null`, `contested: false`, `ownerSince: null`. Cells that have never been walked are absent. The box may not cross the antimeridian and may not be estimated to contain more than 3000 hexagons of the requested resolution (400 BBOX_TOO_LARGE). Rate limited: 120 requests per minute per player. Sent with `Cache-Control: private, max-age=30`.",
+        "parameters": [
+          {
+            "schema": { "minimum": 5, "maximum": 9, "type": "integer" },
+            "in": "query",
+            "name": "res",
+            "required": true
+          },
+          {
+            "schema": {
+              "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            "example": "23.85,54.87,23.98,54.93",
+            "in": "query",
+            "name": "bbox",
+            "required": true,
+            "description": "`minLon,minLat,maxLon,maxLat` in WGS84 degrees; min < max on both axes"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Hexagons in the box",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HexList" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED; `details.field` is `res` or `bbox`) or the box is too large (BBOX_TOO_LARGE; `details.res`, `details.maxCells`, `details.estimatedCells`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "429": {
+            "description": "Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/hexes/{h3}": {
+      "get": {
+        "operationId": "getHex",
+        "summary": "Detail of one resolution-9 hexagon",
+        "tags": ["territory"],
+        "description": "Owner and since when, captain, strength per faction, this week's counted metres and bonuses per faction with the pressure leader and contested flag, the caller's own metres and states (`explored`, `flipped`, `held`), the last eight reckonings (newest first) and `captures` (always empty until feature 006). Any valid resolution-9 cell answers 200 — a never-walked cell has no owner, no strengths and no history.",
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+            "in": "path",
+            "name": "h3",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Hex detail",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HexDetail" } }
+            }
+          },
+          "400": {
+            "description": "Not a resolution-9 cell (VALIDATION_FAILED, `details.field = h3`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reckonings/latest": {
+      "get": {
+        "operationId": "getLatestReckoning",
+        "summary": "The last completed reckoning and the caller’s part in it",
+        "tags": ["territory"],
+        "description": "Week id and run time of the last completed reckoning, when the next one is due (next Monday 00:00 UTC), whether one is in progress, per-faction totals of that week and the caller’s flip count with the flipped cell ids. Before the first reckoning the week fields are null and the totals empty. Sent with `Cache-Control: private, max-age=60`.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Latest reckoning",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningLatest" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/reckonings/{weekId}": {
+      "post": {
+        "operationId": "runReckoning",
+        "summary": "Run (or preview) the reckoning of one week",
+        "tags": ["admin"],
+        "description": "Role `admin` only. Runs the same code as the scheduled job. `sync: true` runs in the request and answers the result (200); otherwise the job is enqueued (202). `dryRun` (requires `sync`) writes nothing — no state, events, snapshots, XP, pushes, no reckoning row — skips the auto-finish of stale walks, and returns the flips it would have made (≤ 1 000 entries). The week must have ended (400 WEEK_NOT_ENDED) and be the next in sequence after the last completed reckoning (409 RECKONING_OUT_OF_ORDER, `details.expectedWeekId`); a week already done answers its stored result with 200; a reckoning already running answers 409 RECKONING_RUNNING. Synchronous runs are meant for development and test datasets; production sizes should be enqueued.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningRunRequest" } }
+          }
+        },
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+            "in": "path",
+            "name": "weekId",
+            "required": true,
+            "description": "ISO week in UTC"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Ran synchronously (or was already done)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReckoningRunResult" }
+              }
+            }
+          },
+          "202": {
+            "description": "Enqueued for the job worker",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningQueued" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED; `details.field` is `weekId` or `dryRun`) or the week has not ended (WEEK_NOT_ENDED, `details.endsAt`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "403": {
+            "description": "The caller is not an admin (FORBIDDEN)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "409": {
+            "description": "Out of sequence (RECKONING_OUT_OF_ORDER, `details.expectedWeekId`) or already running (RECKONING_RUNNING)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "503": {
+            "description": "Async run requested while jobs are disabled (JOBS_DISABLED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getReckoning",
+        "summary": "Status of one week's reckoning",
+        "tags": ["admin"],
+        "description": "Role `admin` only. The stored run state, including the resume stage and cursor progress.",
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+            "in": "path",
+            "name": "weekId",
+            "required": true,
+            "description": "ISO week in UTC"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Reckoning status",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningStatus" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "403": {
+            "description": "The caller is not an admin (FORBIDDEN)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "404": {
+            "description": "No reckoning for this week (RECKONING_NOT_FOUND)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [{ "url": "http://localhost:3000", "description": "Local development (make dev)" }],
@@ -1199,6 +1807,8 @@
     {
       "name": "walks",
       "description": "Walk sessions of the signed-in player (paths are private to their owner)"
-    }
+    },
+    { "name": "territory", "description": "Hex ownership, weekly pressure and reckoning results" },
+    { "name": "admin", "description": "Operator endpoints (role admin)" }
   ]
 }

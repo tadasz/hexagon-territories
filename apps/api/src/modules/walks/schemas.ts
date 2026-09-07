@@ -213,11 +213,21 @@ export const LineStringSchema = Type.Object(
 export type LineString = Static<typeof LineStringSchema>;
 export const LineStringRef = Type.Unsafe<LineString>({ $ref: 'LineString#' });
 
-/** `LineString | null` as `oneOf` (the contract's form). */
+/**
+ * `LineString | null`. The contract writes it as `oneOf: [$ref LineString, null]`, but
+ * swift-openapi-generator 1.13 drops a `oneOf`/`anyOf` property that contains `{type: null}`
+ * (apps/ios/VERIFY.md, feature 003), and with `additionalProperties: false` the generated client
+ * would then reject every finish/detail response. So the same object is emitted inline as
+ * `type: [object, null]`, which the generator maps to an optional value (`OrNull` does the same
+ * for primitives). Keep the properties identical to `LineStringSchema`.
+ */
 const NullableLineString: TSchema & { static: LineString | null } = Type.Unsafe<LineString | null>({
-  oneOf: [{ $ref: 'LineString#' }, { type: 'null' }],
+  type: ['object', 'null'],
+  additionalProperties: false,
+  required: ['type', 'coordinates'],
+  properties: LineStringSchema.properties,
   description:
-    'Simplified accepted path; null while active or with fewer than two accepted samples',
+    'Simplified accepted path; null while active or with fewer than two accepted samples. Same shape as #/components/schemas/LineString, written inline as a nullable object for the generated clients.',
 });
 
 const summaryProps = {

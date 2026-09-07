@@ -65,6 +65,13 @@ one `PathPayload` extension in `WalksMapping.swift` to the generated name. The `
 fail until the committed snapshot and the iOS copy are the same file again — expected, and the reason the iOS copy is
 marked TEMPORARY.
 
+**Resolved by Stream C (T027, same day)**: the API now emits `WalkSummary.path` inline as `type: [object, null]`
+(`apps/api/src/modules/walks/schemas.ts`), the snapshot and this package's `openapi.json` were regenerated with
+`pnpm --filter @nature/api-schema snapshot && apps/ios/scripts/sync-openapi.sh` (no `x-source` marker any more, the
+`@nature/api-schema` iOS-copy equality test passes), `contracts/openapi.yaml` carries the same representation, and
+`cd APIClient && swift test` against the real snapshot: **21 tests, 0 failures** — the generated type is still
+`WalkSummary.PathPayload`, so `WalksMapping.swift` did not change.
+
 ### Not verified here — run on macOS (Xcode 16 / Swift 6) or Xcode Cloud
 
 ```bash

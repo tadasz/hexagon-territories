@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-07
 
-**Status**: Draft
+**Status**: Implemented (2026-09-07; owner/macOS follow-ups in `tasks.md` Phase 4)
 
 **Input**: User description: "Walk sessions with background location, path recording, live per-hex metres estimate, offline outbox, authoritative finishWalk scoring, walk history, GPX replay tool"
 

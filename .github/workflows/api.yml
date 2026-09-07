@@ -1,5 +1,5 @@
 # API, packages and Swift-package CI (specs/001-repo-foundations/tasks.md T027, research.md R8;
-# specs/002-auth-and-factions/tasks.md T030).
+# specs/002-auth-and-factions/tasks.md T030; specs/003-walk-tracking/tasks.md T029).
 #
 # Validation note: GitHub Actions cannot run in the authoring container, so this workflow was
 # validated by parsing it with `yq` and by checking every step against the documented inputs of
@@ -18,13 +18,18 @@
 # `@nature/api-schema` (packages/*) devDepends on `@nature/api`: its snapshot test boots the API's
 # `openapi:print`, so the `rules` job builds `@nature/api` and its workspace dependencies first
 # (turbo's `test` task depends on `^build`, the explicit step makes the order visible in the log).
+# `@nature/api` devDepends on `@nature/walk-sim` (its integration tests import the replay oracle),
+# so the `api` job builds `@nature/walk-sim` explicitly before the API tests as well.
 #
 # The `swift` job runs `swift test` in every Swift package that builds on Linux inside the official
-# swift:6.2.1 container (pinned; matches the toolchain recorded in apps/ios/VERIFY.md).
+# swift:6.2.1 container (pinned; matches the toolchain recorded in apps/ios/VERIFY.md). `Persistence`
+# (and `WalkFeature`, which depends on it) link GRDB against the system SQLite, so the job installs
+# `libsqlite3-dev` first.
 # macOS-only, NOT covered here: the app target `NatureExplorer` (xcodegen + xcodebuild), the
-# `MapFeature` package (MapLibre iOS binary), and the SwiftUI / AuthenticationServices / Security
-# sources of DesignSystem, AuthFeature, FactionsFeature and ProfileFeature, which sit behind
-# `#if canImport(...)` and are only type-checked by Xcode Cloud (apps/ios/ci_scripts/ci_post_clone.sh).
+# `MapFeature` package (MapLibre iOS binary), and the SwiftUI / CoreLocation / CoreMotion /
+# AuthenticationServices / Security sources of DesignSystem, AuthFeature, FactionsFeature,
+# ProfileFeature, Location and WalkFeature, which sit behind `#if canImport(...)` and are only
+# type-checked by Xcode Cloud (apps/ios/ci_scripts/ci_post_clone.sh).
 name: api
 
 on:
@@ -108,7 +113,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build --filter=@nature/api...
+      - name: Build @nature/api, @nature/walk-sim and their dependencies (the API tests import the walk-sim oracle)
+        run: pnpm turbo run build --filter=@nature/api... --filter=@nature/walk-sim...
       - run: pnpm turbo run lint typecheck --filter=@nature/api
       - name: API tests (unit + integration against the built image)
         run: pnpm --filter @nature/api test
@@ -132,10 +138,19 @@ jobs:
           - FactionsFeature
           - ProfileFeature
           - APIClient
+          - Location
+          - Persistence
+          - WalkFeature
     steps:
       - uses: actions/checkout@v4
       - name: swift --version
         run: swift --version
+      - name: Install the system SQLite headers (GRDB links libsqlite3 on Linux)
+        if: matrix.package == 'Persistence' || matrix.package == 'WalkFeature'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends libsqlite3-dev pkg-config
+          pkg-config --exists sqlite3
       - name: swift test
         working-directory: apps/ios/Packages/${{ matrix.package }}
         # APIClient resolves swift-openapi-generator/runtime/urlsession from GitHub and runs the

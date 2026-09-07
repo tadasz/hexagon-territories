@@ -78,10 +78,10 @@ Tooling: pnpm workspaces + turborepo for `apps/api` and `packages/*`; Drizzle Ki
 **Persistence (GRDB)**: `walk`, `location_sample` (queued), `walk_path` (simplified polyline for display), `capture`, `species`, `user_species`, `hex_cache` (owner + weekly pressure, fetched_at), `outbox`. A `SyncCoordinator` actor drains the outbox with backoff and resumes on `NWPathMonitor` and `BGAppRefreshTask`.
 
 ### Walk tracking and path recording
-1. "Start walk" (foreground) creates a `CLBackgroundActivitySession` and starts `liveUpdates(.fitness)`; `UIBackgroundModes = [location, audio]`; `CMPedometer` starts.
+1. "Start walk" (foreground) creates a `CLBackgroundActivitySession` and starts `liveUpdates(.fitness)`; `UIBackgroundModes = [location]` (feature 006 adds `audio` for listening sessions); `CMPedometer` starts.
 2. Device filter mirrors the server's (`territory-rules.md`); keep ~1 sample per 5 s or ≥ 10 m moved.
 3. Accepted samples append to the walk polyline, drawn live by `WalkPathsLayer`. `HexMetersEstimator` splits each new segment at res-9 boundaries and accumulates estimated metres per hex for the HUD. This is an estimate; nothing is scored until finish.
-4. Samples upload in batches (≤ 200, every 60 s), idempotent by `(walkId, seq)`; the server stores them without scoring.
+4. Samples upload in batches (≤ 200, every 60 s), idempotent by `(walkId, seq)`; the server stores them without scoring and answers a **provisional filter answer** (`stored`, `duplicates`, `accepted`, `rejected[{seq, reason}]`, `sampleCount`) that the app may show as a hint — only `finishWalk` re-runs the filter over everything stored and scores.
 5. Finish → `POST /v1/walks/{id}/finish` → the server computes authoritative metres per hex and returns the summary (path, distance, per-hex metres, this week's standing per hex, captures). Offline finish is queued; walks not finished within 12 h are auto-finished server-side.
 6. Auto-pause when stationary > 3 min; auto-end after 6 h. Battery target < 6 % per hour.
 
@@ -102,7 +102,7 @@ Viewfinder or `PhotosPicker`, organ chips (leaf/flower/fruit/bark) → 1280 px J
 
 **Fastify modules**: `auth`, `users`, `factions`, `walks`, `territory` (reckoning, hex reads, tiles), `captures`, `species`, `collection`, `leaderboards`, `push`, `admin`. Rules are imported from `packages/territory-rules`.
 
-**Jobs (pg-boss)**: `account.purge` (30 days after `DELETE /v1/me`, idempotent purge registry), `account.export` (data bundle to object storage), `walk.autofinish` (hourly), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (daily, > 30 days), `push.send`, `species_mask.refresh` (weekly).
+**Jobs (pg-boss)**: `account.purge` (30 days after `DELETE /v1/me`, idempotent purge registry), `account.export` (data bundle to object storage), `walk.autofinish` (cron `0 * * * *`, singleton; finishes walks active for more than 12 h — `WALK_AUTOFINISH_AFTER_H` — through the same `finishWalk` with `finish_reason = autofinish`), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (cron `30 3 * * *`, singleton; drops whole `location_samples` partitions older than 30 days — `WALK_SAMPLE_RETENTION_DAYS` — and never touches `walk_sessions`, `walk_hex_meters` or the simplified path; runner `job:purge-samples`), `push.send`, `species_mask.refresh` (weekly).
 
 **REST, JSON, `/v1`, OpenAPI generated**
 
@@ -113,11 +113,17 @@ DELETE /v1/me (30-day grace);         GET /v1/me/export (enqueues account.export
                                         then 200 ready with a presigned URL valid 1 h; bundle kept 7 days)
 GET  /v1/factions (public, cached 60 s); POST /v1/me/faction (first pick free, then once per 30 days)
 
-POST /v1/walks                       {clientWalkId, startedAt, deviceInfo} → {walkId}
-POST /v1/walks/{id}/samples          {samples:[{seq,ts,lat,lon,hAcc,speed,course,alt}], pedometer} → {accepted, rejected}
-POST /v1/walks/{id}/finish           {endedAt, pedometerTotal} → {distanceM, durationS, path,
-                                        hexes:[{h3, meters, cappedMeters, weekStanding:{leader, myFactionShare}}], xp, flags}
-GET  /v1/walks?cursor=;               GET /v1/walks/{id}
+POST /v1/walks                       {clientWalkId, startedAt, deviceInfo} → 201 {walkId, clientWalkId, startedAt, status, supersededWalkId}
+                                        (idempotent on clientWalkId → 200 with the stored walk; startedAt clamped to [now − 12 h, now + 5 min];
+                                        supersede rule: an active walk whose last activity is before the new startedAt is finished as
+                                        `superseded` in the same transaction, a genuinely overlapping one answers 409 WALK_OVERLAP {activeWalkId};
+                                        403 FACTION_REQUIRED without a faction)
+POST /v1/walks/{id}/samples          {samples:[{seq,ts,lat,lon,hAcc,speed,course,alt}], pedometer} → {stored, duplicates, accepted, rejected, sampleCount}
+                                        (≤ 200 per batch, idempotent by (walkId, seq); the answer is provisional — see §4 step 4)
+POST /v1/walks/{id}/finish           {endedAt, pedometerTotal} → WalkSummary {distanceM, durationS, steps, path,
+                                        hexes:[{h3, meters, cappedMeters, weekStanding:{leader, myFactionShare, owner}}], xp, scored, flags}
+                                        (idempotent: a finished walk returns the same summary; 400 INVALID_ENDED_AT before startedAt)
+GET  /v1/walks?cursor=&limit=         (newest first, 20 per page, max 50);   GET /v1/walks/{id} (owner only, same shape as the summary)
 
 GET  /v1/hexes?res=&bbox=            → [{h3, owner, ownerSince, pressureLeader, contested}]   (res 5–9, bbox capped per res)
 GET  /v1/hexes/{h3}                  owner, strength per faction, this week's metres per faction, my metres, captain,
@@ -136,7 +142,7 @@ POST /v1/devices
 
 **Capture verification**: bird → Python worker (BirdNET FP32 + Geomodel); plant → Pl@ntNet. Results stored as `capture_candidates` and a final status; verified captures upsert `user_species`, award XP and add the bonus.
 
-**Protection**: per-user token bucket on ingest (2 batches/min), 8 640 samples per day, overlapping-walk guard, daily walking-XP cap, App Attest on `POST /walks` and `POST /captures` from feature 008, simulator allowed only for the `tester` role, `anti_cheat_flags` audit table with admin clearing.
+**Protection** (`apps/api/src/modules/walks/limits.ts`, tunable through `WALK_*` variables): per-user ingest rate limit of 30 batches / 15 min (`WALK_INGEST_BATCHES_PER_15MIN`; 2 per minute on average, bursts allowed for outbox drains) and 20 walks / h on `POST /v1/walks` (both `429 RATE_LIMITED` with `retry-after`), 8 640 samples per day per player (`WALK_SAMPLES_PER_DAY`; `429 SAMPLE_QUOTA_EXCEEDED` with `retry-after` = seconds to UTC midnight), overlapping-walk guard (`409 WALK_OVERLAP`, see the supersede rule above), daily walking-XP cap of 300 XP per player per UTC day (`WALK_XP_DAILY_CAP`; walking XP is 1 XP per 100 m of accepted path), App Attest on `POST /walks` and `POST /captures` from feature 008, simulator allowed only for the `tester` role, `anti_cheat_flags` audit table with admin clearing.
 
 ## 6. Data model (Postgres)
 
@@ -162,7 +168,9 @@ walk_sessions(id uuid pk, user_id fk, client_walk_id uuid, faction_id, started_a
       sample_count, hex_count, flags jsonb, device_id, unique(user_id, client_walk_id))
 location_samples(walk_id fk cascade, seq, ts, lat, lon, h_acc, speed, course, alt, accepted bool, reject_reason,
       pk(walk_id, seq)) PARTITION BY RANGE (ts)          -- 30-day retention
-walk_hex_meters(walk_id fk cascade, h3_r9 bigint, meters real, pk(walk_id, h3_r9))
+walk_hex_meters(walk_id fk cascade, h3_r9 bigint, meters real, capped_meters real default 0, pk(walk_id, h3_r9))
+      -- meters = this walk's simplified-path length in the cell; capped_meters = the part that counted after the
+      -- 2 000 m weekly cap per player and cell (territory-rules.md "Scoring at walk finish")
 
 hex_week_contribution(h3_r9 bigint, week_id text, faction_id smallint, user_id uuid,
       meters real, capped_meters real, capture_bonus_m real default 0, walks int, updated_at,

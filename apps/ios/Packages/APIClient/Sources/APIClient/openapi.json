@@ -3,8 +3,7 @@
   "info": {
     "title": "Nature Explorer API",
     "version": "0.1.0",
-    "description": "Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`). Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md \"Scoring at walk finish\"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons never changes here (feature 004).",
-    "x-source": "TEMPORARY: packages/api-schema/openapi.json (feature 002 snapshot) merged with specs/003-walk-tracking/contracts/openapi.yaml because Stream A's snapshot refresh (T012) had not merged; WalkSummary.path is expressed as an inline nullable object because swift-openapi-generator 1.13 drops a `oneOf: [$ref, {type: null}]` property; replace with the real snapshot via apps/ios/scripts/sync-openapi.sh (Stream C, T027)"
+    "description": "Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*`, `/v1/hexes*`, `/v1/reckonings/*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`); `/v1/admin/*` additionally needs role `admin`. Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md \"Scoring at walk finish\"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons changes only inside the `reckoning.weekly` job (docs/territory-rules.md \"Weekly reckoning\") — the hex and reckoning endpoints read its results, the admin endpoint triggers it."
   },
   "components": {
     "securitySchemes": {
@@ -20,32 +19,20 @@
         "additionalProperties": false,
         "description": "Shared error envelope returned by every non-2xx response. `code` is a stable machine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers, never shown verbatim to players; `details` carries validation issues or other structured context.",
         "type": "object",
-        "required": [
-          "error",
-          "requestId"
-        ],
+        "required": ["error", "requestId"],
         "properties": {
           "error": {
             "additionalProperties": false,
             "type": "object",
-            "required": [
-              "code",
-              "message"
-            ],
+            "required": ["code", "message"],
             "properties": {
               "code": {
                 "pattern": "^[A-Z][A-Z0-9_]+$",
                 "type": "string",
                 "example": "VALIDATION_FAILED"
               },
-              "message": {
-                "type": "string"
-              },
-              "details": {
-                "additionalProperties": true,
-                "type": "object",
-                "properties": {}
-              }
+              "message": { "type": "string" },
+              "details": { "additionalProperties": true, "type": "object", "properties": {} }
             }
           },
           "requestId": {
@@ -57,27 +44,17 @@
       "HealthResponse": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "status",
-          "db",
-          "version"
-        ],
+        "required": ["status", "db", "version"],
         "properties": {
           "status": {
             "description": "ok when every dependency check passed",
             "type": "string",
-            "enum": [
-              "ok",
-              "degraded"
-            ]
+            "enum": ["ok", "degraded"]
           },
           "db": {
             "description": "Result of `SELECT 1` against Postgres",
             "type": "string",
-            "enum": [
-              "ok",
-              "error"
-            ]
+            "enum": ["ok", "error"]
           },
           "version": {
             "description": "API package version (from apps/api/package.json)",
@@ -88,12 +65,7 @@
       "FactionStats": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "members",
-          "activeMembers",
-          "hexesOwnedR9",
-          "hexesOwnedR7"
-        ],
+        "required": ["members", "activeMembers", "hexesOwnedR9", "hexesOwnedR7"],
         "properties": {
           "members": {
             "minimum": 0,
@@ -105,73 +77,34 @@
             "description": "Members who used the app within `activeWindowDays`",
             "type": "integer"
           },
-          "hexesOwnedR9": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "hexesOwnedR7": {
-            "minimum": 0,
-            "type": "integer"
-          }
+          "hexesOwnedR9": { "minimum": 0, "type": "integer" },
+          "hexesOwnedR7": { "minimum": 0, "type": "integer" }
         }
       },
       "Faction": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "id",
-          "slug",
-          "name",
-          "emoji",
-          "colorLight",
-          "colorDark",
-          "sort",
-          "stats"
-        ],
+        "required": ["id", "slug", "name", "emoji", "colorLight", "colorDark", "sort", "stats"],
         "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "emoji": {
-            "type": "string"
-          },
-          "colorLight": {
-            "pattern": "^#[0-9A-Fa-f]{6}$",
-            "type": "string"
-          },
-          "colorDark": {
-            "pattern": "^#[0-9A-Fa-f]{6}$",
-            "type": "string"
-          },
-          "sort": {
-            "type": "integer"
-          },
-          "stats": {
-            "$ref": "#/components/schemas/FactionStats"
-          }
+          "id": { "type": "integer" },
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "emoji": { "type": "string" },
+          "colorLight": { "pattern": "^#[0-9A-Fa-f]{6}$", "type": "string" },
+          "colorDark": { "pattern": "^#[0-9A-Fa-f]{6}$", "type": "string" },
+          "sort": { "type": "integer" },
+          "stats": { "$ref": "#/components/schemas/FactionStats" }
         }
       },
       "FactionsResponse": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "factions",
-          "suggestedFactionId",
-          "activeWindowDays"
-        ],
+        "required": ["factions", "suggestedFactionId", "activeWindowDays"],
         "properties": {
           "factions": {
             "description": "Sorted by `sort`, then `id`",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Faction"
-            }
+            "items": { "$ref": "#/components/schemas/Faction" }
           },
           "suggestedFactionId": {
             "description": "Faction with the fewest active members (tie → lowest id)",
@@ -199,54 +132,19 @@
           "suggestedFactionId"
         ],
         "properties": {
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "factionId": {
-            "type": [
-              "null",
-              "integer"
-            ]
-          },
-          "factionChangedAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
+          "id": { "format": "uuid", "type": "string" },
+          "displayName": { "type": "string" },
+          "factionId": { "type": ["null", "integer"] },
+          "factionChangedAt": { "format": "date-time", "type": ["null", "string"] },
           "factionChangeAvailableAt": {
             "format": "date-time",
             "description": "When the next faction change is allowed; null when a change is allowed now (or no faction is set yet)",
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": ["null", "string"]
           },
-          "xp": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "level": {
-            "minimum": 1,
-            "type": "integer"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "player",
-              "tester",
-              "admin"
-            ]
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "xp": { "minimum": 0, "type": "integer" },
+          "level": { "minimum": 1, "type": "integer" },
+          "role": { "type": "string", "enum": ["player", "tester", "admin"] },
+          "createdAt": { "format": "date-time", "type": "string" },
           "suggestedFactionId": {
             "description": "Faction with the fewest active members (tie → lowest id)",
             "type": "integer"
@@ -256,9 +154,7 @@
       "MeUpdate": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "displayName"
-        ],
+        "required": ["displayName"],
         "properties": {
           "displayName": {
             "minLength": 1,
@@ -271,29 +167,15 @@
       "FactionSelect": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "factionId"
-        ],
-        "properties": {
-          "factionId": {
-            "minimum": 1,
-            "maximum": 32767,
-            "type": "integer"
-          }
-        }
+        "required": ["factionId"],
+        "properties": { "factionId": { "minimum": 1, "maximum": 32767, "type": "integer" } }
       },
       "AccountDeletion": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "deletedAt",
-          "purgeAt"
-        ],
+        "required": ["deletedAt", "purgeAt"],
         "properties": {
-          "deletedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "deletedAt": { "format": "date-time", "type": "string" },
           "purgeAt": {
             "format": "date-time",
             "description": "When the erasure job runs (deletedAt + 30 days)",
@@ -314,57 +196,22 @@
           "error"
         ],
         "properties": {
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "ready",
-              "failed"
-            ]
-          },
-          "requestedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "completedAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "expiresAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
+          "id": { "format": "uuid", "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "ready", "failed"] },
+          "requestedAt": { "format": "date-time", "type": "string" },
+          "completedAt": { "format": "date-time", "type": ["null", "string"] },
+          "expiresAt": { "format": "date-time", "type": ["null", "string"] },
           "downloadUrl": {
             "description": "Presigned GET URL, valid for one hour; only when status is ready",
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": ["null", "string"]
           },
-          "error": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
+          "error": { "type": ["null", "string"] }
         }
       },
       "AuthAppleRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "identityToken"
-        ],
+        "required": ["identityToken"],
         "properties": {
           "identityToken": {
             "minLength": 1,
@@ -383,14 +230,8 @@
             "description": "Present only on the first authorization, when Apple hands the name to the app",
             "type": "object",
             "properties": {
-              "givenName": {
-                "maxLength": 100,
-                "type": "string"
-              },
-              "familyName": {
-                "maxLength": 100,
-                "type": "string"
-              }
+              "givenName": { "maxLength": 100, "type": "string" },
+              "familyName": { "maxLength": 100, "type": "string" }
             }
           }
         }
@@ -398,48 +239,22 @@
       "TokenPair": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "accessToken",
-          "accessExpiresAt",
-          "refreshToken",
-          "refreshExpiresAt"
-        ],
+        "required": ["accessToken", "accessExpiresAt", "refreshToken", "refreshExpiresAt"],
         "properties": {
-          "accessToken": {
-            "type": "string"
-          },
-          "accessExpiresAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string"
-          },
-          "refreshExpiresAt": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "accessToken": { "type": "string" },
+          "accessExpiresAt": { "format": "date-time", "type": "string" },
+          "refreshToken": { "type": "string" },
+          "refreshExpiresAt": { "format": "date-time", "type": "string" }
         }
       },
       "AuthResponse": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "tokens",
-          "me",
-          "isNewUser",
-          "restored"
-        ],
+        "required": ["tokens", "me", "isNewUser", "restored"],
         "properties": {
-          "tokens": {
-            "$ref": "#/components/schemas/TokenPair"
-          },
-          "me": {
-            "$ref": "#/components/schemas/Me"
-          },
-          "isNewUser": {
-            "type": "boolean"
-          },
+          "tokens": { "$ref": "#/components/schemas/TokenPair" },
+          "me": { "$ref": "#/components/schemas/Me" },
+          "isNewUser": { "type": "boolean" },
           "restored": {
             "description": "True when an account marked deleted was reactivated by this sign-in",
             "type": "boolean"
@@ -449,64 +264,33 @@
       "RefreshRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "refreshToken"
-        ],
-        "properties": {
-          "refreshToken": {
-            "minLength": 1,
-            "maxLength": 256,
-            "type": "string"
-          }
-        }
+        "required": ["refreshToken"],
+        "properties": { "refreshToken": { "minLength": 1, "maxLength": 256, "type": "string" } }
       },
       "LogoutRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "refreshToken"
-        ],
-        "properties": {
-          "refreshToken": {
-            "minLength": 1,
-            "maxLength": 256,
-            "type": "string"
-          }
-        }
+        "required": ["refreshToken"],
+        "properties": { "refreshToken": { "minLength": 1, "maxLength": 256, "type": "string" } }
       },
       "WalkCreateRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "clientWalkId",
-          "startedAt"
-        ],
+        "required": ["clientWalkId", "startedAt"],
         "properties": {
           "clientWalkId": {
             "format": "uuid",
             "description": "Generated on the device when the walk starts; the idempotency key",
             "type": "string"
           },
-          "startedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "startedAt": { "format": "date-time", "type": "string" },
           "deviceInfo": {
             "additionalProperties": false,
             "type": "object",
             "properties": {
-              "model": {
-                "maxLength": 64,
-                "type": "string"
-              },
-              "osVersion": {
-                "maxLength": 32,
-                "type": "string"
-              },
-              "appVersion": {
-                "maxLength": 32,
-                "type": "string"
-              }
+              "model": { "maxLength": 64, "type": "string" },
+              "osVersion": { "maxLength": 32, "type": "string" },
+              "appVersion": { "maxLength": 32, "type": "string" }
             }
           }
         }
@@ -514,76 +298,32 @@
       "WalkCreated": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "walkId",
-          "clientWalkId",
-          "startedAt",
-          "status",
-          "supersededWalkId"
-        ],
+        "required": ["walkId", "clientWalkId", "startedAt", "status", "supersededWalkId"],
         "properties": {
-          "walkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "clientWalkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "startedAt": {
-            "format": "date-time",
-            "description": "After clamping",
-            "type": "string"
-          },
+          "walkId": { "format": "uuid", "type": "string" },
+          "clientWalkId": { "format": "uuid", "type": "string" },
+          "startedAt": { "format": "date-time", "description": "After clamping", "type": "string" },
           "status": {
             "description": "`active` for a new walk; when the clientWalkId already existed, the stored status of that walk",
             "type": "string",
-            "enum": [
-              "active",
-              "finished",
-              "flagged",
-              "abandoned"
-            ]
+            "enum": ["active", "finished", "flagged", "abandoned"]
           },
           "supersededWalkId": {
             "format": "uuid",
             "description": "The previously active walk that was auto-finished by this creation",
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": ["null", "string"]
           }
         }
       },
       "LocationSample": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "seq",
-          "ts",
-          "lat",
-          "lon",
-          "hAcc"
-        ],
+        "required": ["seq", "ts", "lat", "lon", "hAcc"],
         "properties": {
-          "seq": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "ts": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "lat": {
-            "minimum": -90,
-            "maximum": 90,
-            "type": "number"
-          },
-          "lon": {
-            "minimum": -180,
-            "maximum": 180,
-            "type": "number"
-          },
+          "seq": { "minimum": 0, "type": "integer" },
+          "ts": { "format": "date-time", "type": "string" },
+          "lat": { "minimum": -90, "maximum": 90, "type": "number" },
+          "lon": { "minimum": -180, "maximum": 180, "type": "number" },
           "hAcc": {
             "minimum": 0,
             "description": "Horizontal accuracy in metres",
@@ -592,101 +332,49 @@
           "speed": {
             "minimum": 0,
             "description": "Device-reported speed in m/s",
-            "type": [
-              "number",
-              "null"
-            ]
+            "type": ["number", "null"]
           },
-          "course": {
-            "minimum": 0,
-            "maximum": 360,
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "alt": {
-            "type": [
-              "number",
-              "null"
-            ]
-          }
+          "course": { "minimum": 0, "maximum": 360, "type": ["number", "null"] },
+          "alt": { "type": ["number", "null"] }
         }
       },
       "PedometerWindow": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "steps",
-          "since",
-          "until"
-        ],
+        "required": ["steps", "since", "until"],
         "properties": {
-          "steps": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "since": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "until": {
-            "format": "date-time",
-            "type": "string"
-          }
+          "steps": { "minimum": 0, "type": "integer" },
+          "since": { "format": "date-time", "type": "string" },
+          "until": { "format": "date-time", "type": "string" }
         }
       },
       "SampleBatchRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "samples"
-        ],
+        "required": ["samples"],
         "properties": {
           "samples": {
             "minItems": 1,
             "maxItems": 200,
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LocationSample"
-            }
+            "items": { "$ref": "#/components/schemas/LocationSample" }
           },
-          "pedometer": {
-            "$ref": "#/components/schemas/PedometerWindow"
-          }
+          "pedometer": { "$ref": "#/components/schemas/PedometerWindow" }
         }
       },
       "RejectedSample": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "seq",
-          "reason"
-        ],
+        "required": ["seq", "reason"],
         "properties": {
-          "seq": {
-            "type": "integer"
-          },
-          "reason": {
-            "type": "string",
-            "enum": [
-              "accuracy",
-              "speed",
-              "non_monotonic"
-            ]
-          }
+          "seq": { "type": "integer" },
+          "reason": { "type": "string", "enum": ["accuracy", "speed", "non_monotonic"] }
         }
       },
       "SampleBatchResult": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "stored",
-          "duplicates",
-          "accepted",
-          "rejected",
-          "sampleCount"
-        ],
+        "required": ["stored", "duplicates", "accepted", "rejected", "sampleCount"],
         "properties": {
           "stored": {
             "minimum": 0,
@@ -701,16 +389,12 @@
           "accepted": {
             "description": "Provisionally accepted seqs among the stored rows",
             "type": "array",
-            "items": {
-              "type": "integer"
-            }
+            "items": { "type": "integer" }
           },
           "rejected": {
             "description": "Provisionally rejected seqs among the stored rows",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RejectedSample"
-            }
+            "items": { "$ref": "#/components/schemas/RejectedSample" }
           },
           "sampleCount": {
             "minimum": 0,
@@ -722,39 +406,24 @@
       "WalkFinishRequest": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "endedAt"
-        ],
+        "required": ["endedAt"],
         "properties": {
-          "endedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
+          "endedAt": { "format": "date-time", "type": "string" },
           "pedometerTotal": {
             "minimum": 0,
             "description": "Steps counted by the device during the walk; omitted when the pedometer is unavailable",
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": ["integer", "null"]
           }
         }
       },
       "WeekStanding": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "leader",
-          "myFactionShare",
-          "owner"
-        ],
+        "required": ["leader", "myFactionShare", "owner"],
         "properties": {
           "leader": {
             "description": "Faction with the highest (strength × 0.5 + this week's capped metres + bonuses); null when nobody has anything",
-            "type": [
-              "null",
-              "integer"
-            ]
+            "type": ["null", "integer"]
           },
           "myFactionShare": {
             "minimum": 0,
@@ -764,27 +433,16 @@
           },
           "owner": {
             "description": "Current owner from the last reckoning (informational; unchanged by walks)",
-            "type": [
-              "null",
-              "integer"
-            ]
+            "type": ["null", "integer"]
           }
         }
       },
       "WalkHex": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "h3",
-          "meters",
-          "cappedMeters",
-          "weekStanding"
-        ],
+        "required": ["h3", "meters", "cappedMeters", "weekStanding"],
         "properties": {
-          "h3": {
-            "pattern": "^[0-9a-f]{15}$",
-            "type": "string"
-          },
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
           "meters": {
             "minimum": 0,
             "description": "Raw metres of this walk's simplified path inside the cell",
@@ -795,25 +453,15 @@
             "description": "Metres of this walk that counted toward the player's 2 000 m weekly cap in the cell (0 when flagged)",
             "type": "number"
           },
-          "weekStanding": {
-            "$ref": "#/components/schemas/WeekStanding"
-          }
+          "weekStanding": { "$ref": "#/components/schemas/WeekStanding" }
         }
       },
       "LineString": {
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "type",
-          "coordinates"
-        ],
+        "required": ["type", "coordinates"],
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "LineString"
-            ]
-          },
+          "type": { "type": "string", "enum": ["LineString"] },
           "coordinates": {
             "minItems": 2,
             "description": "GeoJSON positions [lon, lat]",
@@ -822,9 +470,7 @@
               "minItems": 2,
               "maxItems": 2,
               "type": "array",
-              "items": {
-                "type": "number"
-              }
+              "items": { "type": "number" }
             }
           }
         }
@@ -853,126 +499,42 @@
           "path"
         ],
         "properties": {
-          "walkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "clientWalkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "active",
-              "finished",
-              "flagged",
-              "abandoned"
-            ]
-          },
+          "walkId": { "format": "uuid", "type": "string" },
+          "clientWalkId": { "format": "uuid", "type": "string" },
+          "status": { "type": "string", "enum": ["active", "finished", "flagged", "abandoned"] },
           "finishReason": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "enum": [
-              "client",
-              "autofinish",
-              "superseded",
-              null
-            ]
+            "type": ["null", "string"],
+            "enum": ["client", "autofinish", "superseded", null]
           },
-          "startedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "endedAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "finishedAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "weekId": {
-            "pattern": "^[0-9]{4}-W[0-9]{2}$",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "distanceM": {
-            "minimum": 0,
-            "type": "number"
-          },
-          "durationS": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "steps": {
-            "type": [
-              "null",
-              "integer"
-            ]
-          },
-          "sampleCount": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "hexCount": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "xp": {
-            "minimum": 0,
-            "type": "integer"
-          },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "endedAt": { "format": "date-time", "type": ["null", "string"] },
+          "finishedAt": { "format": "date-time", "type": ["null", "string"] },
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
+          "distanceM": { "minimum": 0, "type": "number" },
+          "durationS": { "minimum": 0, "type": "integer" },
+          "steps": { "type": ["null", "integer"] },
+          "sampleCount": { "minimum": 0, "type": "integer" },
+          "hexCount": { "minimum": 0, "type": "integer" },
+          "xp": { "minimum": 0, "type": "integer" },
           "scored": {
             "description": "True when contributions and XP were written (false while active and for flagged walks)",
             "type": "boolean"
           },
           "flags": {
             "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "teleport",
-                "speed",
-                "distance",
-                "no_steps"
-              ]
-            }
+            "items": { "type": "string", "enum": ["teleport", "speed", "distance", "no_steps"] }
           },
           "hexes": {
             "description": "Sorted by h3 ascending; empty while active",
             "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WalkHex"
-            }
+            "items": { "$ref": "#/components/schemas/WalkHex" }
           },
           "path": {
+            "type": ["null", "object"],
             "additionalProperties": false,
-            "type": [
-              "object",
-              "null"
-            ],
-            "required": [
-              "type",
-              "coordinates"
-            ],
+            "required": ["type", "coordinates"],
             "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "LineString"
-                ]
-              },
+              "type": { "type": "string", "enum": ["LineString"] },
               "coordinates": {
                 "minItems": 2,
                 "description": "GeoJSON positions [lon, lat]",
@@ -981,13 +543,11 @@
                   "minItems": 2,
                   "maxItems": 2,
                   "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
+                  "items": { "type": "number" }
                 }
               }
             },
-            "description": "Simplified accepted path; null while active or with fewer than two accepted samples"
+            "description": "Simplified accepted path; null while active or with fewer than two accepted samples. Same shape as #/components/schemas/LineString, written inline as a nullable object for the generated clients."
           }
         }
       },
@@ -1010,161 +570,400 @@
           "flags"
         ],
         "properties": {
-          "walkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "clientWalkId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "active",
-              "finished",
-              "flagged",
-              "abandoned"
-            ]
-          },
+          "walkId": { "format": "uuid", "type": "string" },
+          "clientWalkId": { "format": "uuid", "type": "string" },
+          "status": { "type": "string", "enum": ["active", "finished", "flagged", "abandoned"] },
           "finishReason": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "enum": [
-              "client",
-              "autofinish",
-              "superseded",
-              null
-            ]
+            "type": ["null", "string"],
+            "enum": ["client", "autofinish", "superseded", null]
           },
-          "startedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "endedAt": {
-            "format": "date-time",
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "weekId": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "distanceM": {
-            "type": "number"
-          },
-          "durationS": {
-            "type": "integer"
-          },
-          "hexCount": {
-            "type": "integer"
-          },
-          "xp": {
-            "type": "integer"
-          },
-          "scored": {
-            "type": "boolean"
-          },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "endedAt": { "format": "date-time", "type": ["null", "string"] },
+          "weekId": { "type": ["null", "string"] },
+          "distanceM": { "type": "number" },
+          "durationS": { "type": "integer" },
+          "hexCount": { "type": "integer" },
+          "xp": { "type": "integer" },
+          "scored": { "type": "boolean" },
           "flags": {
             "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "teleport",
-                "speed",
-                "distance",
-                "no_steps"
-              ]
-            }
+            "items": { "type": "string", "enum": ["teleport", "speed", "distance", "no_steps"] }
           }
         }
       },
       "WalkListPage": {
         "additionalProperties": false,
         "type": "object",
+        "required": ["items", "nextCursor"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/WalkListItem" } },
+          "nextCursor": { "type": ["null", "string"] }
+        }
+      },
+      "HexListItem": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["h3", "res", "owner", "ownerSince", "pressureLeader", "contested"],
+        "properties": {
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "res": { "minimum": 5, "maximum": 9, "type": "integer" },
+          "owner": {
+            "description": "Faction owning the hexagon after the last reckoning",
+            "type": ["null", "integer"]
+          },
+          "ownerSince": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "Week the current owner took the cell; null when unclaimed or for res 5–8",
+            "type": ["null", "string"]
+          },
+          "pressureLeader": {
+            "description": "Faction leading strength × 0.5 + this week's capped metres + bonuses (ties → lowest id); null when nobody has anything or for res 5–8",
+            "type": ["null", "integer"]
+          },
+          "contested": {
+            "description": "pressureLeader exists and differs from owner (always false for res 5–8)",
+            "type": "boolean"
+          }
+        }
+      },
+      "HexList": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "res", "items"],
+        "properties": {
+          "weekId": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "The current week the pressure was computed for",
+            "type": "string"
+          },
+          "res": { "minimum": 5, "maximum": 9, "type": "integer" },
+          "items": {
+            "maxItems": 3000,
+            "description": "Sorted by h3 ascending",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexListItem" }
+          }
+        }
+      },
+      "FactionStrength": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["factionId", "strength"],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "strength": { "minimum": 0, "type": "number" }
+        }
+      },
+      "HexWeekFaction": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["factionId", "cappedMeters", "bonusMeters", "score"],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "cappedMeters": { "minimum": 0, "type": "number" },
+          "bonusMeters": { "minimum": 0, "type": "number" },
+          "score": {
+            "minimum": 0,
+            "description": "strength × 0.5 + cappedMeters + bonusMeters",
+            "type": "number"
+          }
+        }
+      },
+      "HexWeek": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "factions", "pressureLeader", "contested"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "factions": {
+            "description": "Sorted by factionId; factions with nothing this week and no strength are omitted",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexWeekFaction" }
+          },
+          "pressureLeader": { "type": ["null", "integer"] },
+          "contested": { "type": "boolean" }
+        }
+      },
+      "HexCaptain": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["userId", "displayName"],
+        "properties": {
+          "userId": { "format": "uuid", "type": "string" },
+          "displayName": { "type": "string" }
+        }
+      },
+      "HexMe": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["meters", "cappedMeters", "explored", "flipped", "held"],
+        "properties": {
+          "meters": {
+            "minimum": 0,
+            "description": "The caller's raw metres in the cell this week",
+            "type": "number"
+          },
+          "cappedMeters": { "minimum": 0, "type": "number" },
+          "explored": {
+            "description": "The caller has metres in the cell in any week",
+            "type": "boolean"
+          },
+          "flipped": {
+            "description": "The caller's metres were part of a reckoning that flipped the cell to their faction",
+            "type": "boolean"
+          },
+          "held": { "description": "The caller is the current captain", "type": "boolean" }
+        }
+      },
+      "HexReckoningEntry": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "owner", "flipped", "from", "to", "strengths", "captain"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "owner": { "type": ["null", "integer"] },
+          "flipped": { "type": "boolean" },
+          "from": { "type": ["null", "integer"] },
+          "to": { "type": ["null", "integer"] },
+          "strengths": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionStrength" }
+          },
+          "captain": {
+            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
+          }
+        }
+      },
+      "HexDetail": {
+        "additionalProperties": false,
+        "type": "object",
         "required": [
-          "items",
-          "nextCursor"
+          "h3",
+          "owner",
+          "ownerSince",
+          "captain",
+          "strengths",
+          "week",
+          "me",
+          "reckonings",
+          "captures"
         ],
         "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WalkListItem"
-            }
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "owner": { "type": ["null", "integer"] },
+          "ownerSince": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
+          "captain": {
+            "oneOf": [{ "$ref": "#/components/schemas/HexCaptain" }, { "type": "null" }]
           },
-          "nextCursor": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      }
-    },
-    "parameters": {
-      "WalkId": {
-        "name": "id",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "format": "uuid"
-        }
-      }
-    },
-    "responses": {
-      "BadRequest": {
-        "description": "Request validation failed (code VALIDATION_FAILED; `details.field` names the offending field, e.g. `samples` for a batch over 200 or `cursor` for a malformed cursor)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
+          "strengths": {
+            "description": "Sorted by factionId",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionStrength" }
+          },
+          "week": { "$ref": "#/components/schemas/HexWeek" },
+          "me": { "$ref": "#/components/schemas/HexMe" },
+          "reckonings": {
+            "maxItems": 8,
+            "description": "Newest first",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HexReckoningEntry" }
+          },
+          "captures": {
+            "description": "Always empty in feature 004; feature 006 defines the item schema",
+            "type": "array",
+            "items": {}
           }
         }
       },
-      "Unauthorized": {
-        "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
+      "FactionTotal": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "factionId",
+          "hexesOwnedR9",
+          "hexesOwnedR7",
+          "meters",
+          "activeUsers",
+          "captures",
+          "flipsGained",
+          "flipsLost"
+        ],
+        "properties": {
+          "factionId": { "type": "integer" },
+          "hexesOwnedR9": { "minimum": 0, "type": "integer" },
+          "hexesOwnedR7": { "minimum": 0, "type": "integer" },
+          "meters": {
+            "minimum": 0,
+            "description": "Capped walking metres the faction earned in the week",
+            "type": "number"
+          },
+          "activeUsers": { "minimum": 0, "type": "integer" },
+          "captures": { "minimum": 0, "type": "integer" },
+          "flipsGained": { "minimum": 0, "type": "integer" },
+          "flipsLost": { "minimum": 0, "type": "integer" }
+        }
+      },
+      "ReckoningLatest": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "ranAt",
+          "nextAt",
+          "inProgress",
+          "factionTotals",
+          "myFlips",
+          "myFlippedHexes"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": ["null", "string"] },
+          "ranAt": { "format": "date-time", "type": ["null", "string"] },
+          "nextAt": {
+            "format": "date-time",
+            "description": "Next Monday 00:00 UTC after now",
+            "type": "string"
+          },
+          "inProgress": {
+            "pattern": "^[0-9]{4}-W[0-9]{2}$",
+            "description": "Week id of a reckoning currently running, if any",
+            "type": ["null", "string"]
+          },
+          "factionTotals": {
+            "description": "Sorted by factionId; empty before the first reckoning",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FactionTotal" }
+          },
+          "myFlips": {
+            "minimum": 0,
+            "description": "Cells the caller helped flip to their faction in that week",
+            "type": "integer"
+          },
+          "myFlippedHexes": {
+            "maxItems": 200,
+            "description": "Sorted by h3",
+            "type": "array",
+            "items": { "pattern": "^[0-9a-f]{15}$", "type": "string" }
           }
         }
       },
-      "WalkNotFound": {
-        "description": "Unknown walk id or a walk that belongs to another player (code WALK_NOT_FOUND; never distinguishes the two)",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
+      "ReckoningRunRequest": {
+        "additionalProperties": false,
+        "type": "object",
+        "properties": {
+          "dryRun": {
+            "default": false,
+            "description": "Compute and report the flips without writing anything; requires sync",
+            "type": "boolean"
+          },
+          "sync": {
+            "default": false,
+            "description": "Run inside the request and answer the result instead of enqueuing the job",
+            "type": "boolean"
           }
         }
       },
-      "RateLimited": {
-        "description": "Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
-        "headers": {
-          "retry-after": {
-            "schema": {
-              "type": "integer"
-            }
+      "FlipPreview": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["h3", "from", "to"],
+        "properties": {
+          "h3": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+          "from": { "type": ["null", "integer"] },
+          "to": { "type": ["null", "integer"] }
+        }
+      },
+      "ReckoningRunResult": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "dryRun",
+          "status",
+          "resumed",
+          "hexesProcessed",
+          "flips",
+          "parentFlips",
+          "walksAutofinished",
+          "staleWalksSkipped",
+          "pushQueued",
+          "leaderboardRows",
+          "durationMs",
+          "startedAt",
+          "finishedAt",
+          "flipsPreview"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "dryRun": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["done"] },
+          "resumed": {
+            "description": "The run continued an earlier interrupted run of the same week",
+            "type": "boolean"
+          },
+          "hexesProcessed": { "minimum": 0, "type": "integer" },
+          "flips": { "minimum": 0, "type": "integer" },
+          "parentFlips": { "minimum": 0, "type": "integer" },
+          "walksAutofinished": { "minimum": 0, "type": "integer" },
+          "staleWalksSkipped": {
+            "minimum": 0,
+            "description": "Dry run only — stale walks a real run would have finished first",
+            "type": "integer"
+          },
+          "pushQueued": { "minimum": 0, "type": "integer" },
+          "leaderboardRows": { "minimum": 0, "type": "integer" },
+          "durationMs": { "minimum": 0, "type": "integer" },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "finishedAt": { "format": "date-time", "type": "string" },
+          "flipsPreview": {
+            "maxItems": 1000,
+            "description": "Dry run only; empty for a real run",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FlipPreview" }
           }
-        },
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
+        }
+      },
+      "ReckoningQueued": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["weekId", "status", "jobId"],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "status": { "type": "string", "enum": ["queued"] },
+          "jobId": { "type": "string" }
+        }
+      },
+      "ReckoningStatus": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weekId",
+          "status",
+          "stage",
+          "attempt",
+          "startedAt",
+          "finishedAt",
+          "hexesProcessed",
+          "flips",
+          "parentFlips",
+          "batches",
+          "walksAutofinished",
+          "pushQueued",
+          "error"
+        ],
+        "properties": {
+          "weekId": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+          "status": { "type": "string", "enum": ["running", "done", "failed"] },
+          "stage": { "type": "string", "enum": ["walks", "cells", "rollup", "push", "done"] },
+          "attempt": { "minimum": 1, "type": "integer" },
+          "startedAt": { "format": "date-time", "type": "string" },
+          "finishedAt": { "format": "date-time", "type": ["null", "string"] },
+          "hexesProcessed": { "type": "integer" },
+          "flips": { "type": "integer" },
+          "parentFlips": { "type": "integer" },
+          "batches": { "type": "integer" },
+          "walksAutofinished": { "type": "integer" },
+          "pushQueued": { "type": "integer" },
+          "error": { "type": ["null", "string"] }
         }
       }
     }
@@ -1174,9 +973,7 @@
       "get": {
         "operationId": "getOpenApiDocument",
         "summary": "The OpenAPI 3.1 document describing this server",
-        "tags": [
-          "ops"
-        ],
+        "tags": ["ops"],
         "description": "Generated at startup from the registered routes` TypeBox schemas. Snapshotted into packages/api-schema/openapi.json, from which the iOS client is generated.",
         "security": [],
         "responses": {
@@ -1187,27 +984,11 @@
                 "schema": {
                   "additionalProperties": true,
                   "type": "object",
-                  "required": [
-                    "openapi",
-                    "info",
-                    "paths",
-                    "components"
-                  ],
+                  "required": ["openapi", "info", "paths", "components"],
                   "properties": {
-                    "openapi": {
-                      "pattern": "^3\\.1\\.\\d+$",
-                      "type": "string"
-                    },
-                    "info": {
-                      "additionalProperties": true,
-                      "type": "object",
-                      "properties": {}
-                    },
-                    "paths": {
-                      "additionalProperties": true,
-                      "type": "object",
-                      "properties": {}
-                    },
+                    "openapi": { "pattern": "^3\\.1\\.\\d+$", "type": "string" },
+                    "info": { "additionalProperties": true, "type": "object", "properties": {} },
+                    "paths": { "additionalProperties": true, "type": "object", "properties": {} },
                     "components": {
                       "additionalProperties": true,
                       "type": "object",
@@ -1225,29 +1006,19 @@
       "get": {
         "operationId": "getHealth",
         "summary": "Liveness and database readiness",
-        "tags": [
-          "ops"
-        ],
+        "tags": ["ops"],
         "description": "Runs `SELECT 1` against Postgres with a 2 s timeout. Returns 200 when the database answers, 503 with `db: \"error\"` otherwise. Never requires authentication.",
         "responses": {
           "200": {
             "description": "API and database are reachable",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } }
             }
           },
           "503": {
             "description": "API is up but the database is not reachable",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } }
             }
           }
         }
@@ -1257,18 +1028,12 @@
       "post": {
         "operationId": "signInWithApple",
         "summary": "Sign in (or up) with an Apple identity token",
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "description": "Verifies `identityToken` against Apple's JWKS (issuer `https://appleid.apple.com`, audience = the app's bundle identifier(s)), then creates or resumes the account keyed by Apple's `sub`. E-mail and `fullName` are stored only when the account is created; later calls ignore them. An account marked deleted within the last 30 days is restored (`restored: true`). Rate limited: 20 requests per minute per client address.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthAppleRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/AuthAppleRequest" } }
           }
         },
         "security": [],
@@ -1276,51 +1041,31 @@
           "200": {
             "description": "Tokens for the (new or existing) account and the player's profile",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
             }
           },
           "400": {
             "description": "Request validation failed (code VALIDATION_FAILED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
             "description": "The identity token is invalid (code INVALID_APPLE_TOKEN, `details.reason` in expired | audience | issuer | signature | malformed)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "429": {
             "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "503": {
             "description": "Apple's key service is unreachable (code APPLE_UNAVAILABLE); retry later",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1330,18 +1075,12 @@
       "post": {
         "operationId": "refreshTokens",
         "summary": "Rotate a refresh token",
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "description": "Exchanges a valid refresh token for a new token pair and revokes the presented token. Presenting a token that was already rotated revokes every refresh token of the account (code REFRESH_REUSED). Rate limited: 20 requests per minute per client address.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RefreshRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/RefreshRequest" } }
           }
         },
         "security": [],
@@ -1349,41 +1088,25 @@
           "200": {
             "description": "New token pair",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenPair"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/TokenPair" } }
             }
           },
           "400": {
             "description": "Request validation failed (code VALIDATION_FAILED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
             "description": "Unknown, expired or revoked token (INVALID_REFRESH_TOKEN), reuse of a rotated token (REFRESH_REUSED), or deleted account (ACCOUNT_DELETED); the client must sign in again",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "429": {
             "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1393,57 +1116,33 @@
       "post": {
         "operationId": "logout",
         "summary": "Revoke the presented refresh token (sign out this device)",
-        "tags": [
-          "auth"
-        ],
+        "tags": ["auth"],
         "description": "Revokes the refresh token if it belongs to the caller. Always succeeds for a valid session, even when the token is already revoked or unknown. Other devices are unaffected.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LogoutRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/LogoutRequest" } }
           }
         },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "204": {
-            "description": "Signed out"
-          },
+          "204": { "description": "Signed out" },
           "400": {
             "description": "Request validation failed (code VALIDATION_FAILED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "429": {
             "description": "Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1453,30 +1152,20 @@
       "get": {
         "operationId": "listFactions",
         "summary": "The three factions with live statistics and the suggested faction",
-        "tags": [
-          "factions"
-        ],
+        "tags": ["factions"],
         "description": "No session required. Statistics are computed live: members and active members (used the app within `activeWindowDays`, not deleted, has a faction) from the player table, hexes owned at resolution 9 and 7 from the territory tables (zero until the first reckoning). `suggestedFactionId` is the faction with the fewest active members, ties broken by the lowest id. Sent with `Cache-Control: public, max-age=60`.",
         "security": [],
         "responses": {
           "200": {
             "description": "Factions sorted by `sort`, then `id`",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FactionsResponse"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/FactionsResponse" } }
             }
           },
           "503": {
             "description": "Database not reachable (code DB_UNAVAILABLE)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1486,34 +1175,18 @@
       "get": {
         "operationId": "getMe",
         "summary": "The signed-in player's profile",
-        "tags": [
-          "me"
-        ],
+        "tags": ["me"],
         "description": "Includes `suggestedFactionId` so the faction pick screen needs no second call. Never returns the e-mail address.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1521,54 +1194,30 @@
       "patch": {
         "operationId": "updateMe",
         "summary": "Update the display name",
-        "tags": [
-          "me"
-        ],
+        "tags": ["me"],
         "description": "The display name is trimmed, must be 2–24 Unicode scalars long and contain no control characters. Violations answer 400 VALIDATION_FAILED with `details.field = \"displayName\"` and `details.rule` in tooShort | tooLong | controlCharacter.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MeUpdate"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/MeUpdate" } }
           }
         },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Updated profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
           },
           "400": {
             "description": "Request validation failed (code VALIDATION_FAILED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1576,34 +1225,20 @@
       "delete": {
         "operationId": "deleteMe",
         "summary": "Delete the account (30-day grace period)",
-        "tags": [
-          "me"
-        ],
+        "tags": ["me"],
         "description": "Marks the account deleted, revokes every refresh token and schedules erasure 30 days later (`account.purge`). Signing in with the same Apple ID before `purgeAt` restores the account. After this call every request with the old credentials answers 401 ACCOUNT_DELETED.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Deletion accepted",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountDeletion"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/AccountDeletion" } }
             }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1613,74 +1248,42 @@
       "post": {
         "operationId": "selectFaction",
         "summary": "Pick or change the faction",
-        "tags": [
-          "me"
-        ],
+        "tags": ["me"],
         "description": "The first pick is free and starts no lock. Re-selecting the current faction is a no-op. A change is allowed when the player has never changed or the previous change is at least 30 days old; otherwise 409 FACTION_CHANGE_LOCKED with `details.nextChangeAt`. XP and level are never altered.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FactionSelect"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/FactionSelect" } }
           }
         },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Updated profile (with `factionChangeAvailableAt` and `suggestedFactionId`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
           },
           "400": {
             "description": "Request validation failed (code VALIDATION_FAILED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "404": {
             "description": "Unknown faction id (code FACTION_NOT_FOUND)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "409": {
             "description": "Faction change locked (code FACTION_CHANGE_LOCKED, `details.nextChangeAt` ISO 8601)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1690,44 +1293,26 @@
       "get": {
         "operationId": "getExport",
         "summary": "Request or poll the player's data export",
-        "tags": [
-          "me"
-        ],
+        "tags": ["me"],
         "description": "Returns the latest export when it is pending, ready and not older than 7 days (with a fresh `downloadUrl` valid for one hour), or failed less than a minute ago (so the failure is visible). Otherwise enqueues a new export (`account.export`) and answers 202 with `status: pending`. Clients poll every 5 seconds while pending.",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Existing export (pending, ready or failed)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportStatus"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/ExportStatus" } }
             }
           },
           "202": {
             "description": "A new export was enqueued",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportStatus"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/ExportStatus" } }
             }
           },
           "401": {
             "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1735,208 +1320,160 @@
     },
     "/v1/walks": {
       "post": {
-        "tags": [
-          "walks"
-        ],
         "operationId": "createWalk",
         "summary": "Start a walk (idempotent on clientWalkId)",
-        "description": "Creates the walk for `(player, clientWalkId)`; repeating the call returns the same walk\nwith 200. `startedAt` is clamped to [now − 12 h, now + 5 min]. If the player has an\nactive walk whose last activity precedes `startedAt`, that walk is finished automatically\n(`supersededWalkId`, reason `superseded`); if the ranges overlap the request is refused\nwith 409 WALK_OVERLAP. Players without a faction cannot start walks (403\nFACTION_REQUIRED). Rate limited: 20 creations per hour per player.\n",
+        "tags": ["walks"],
+        "description": "Creates the walk for `(player, clientWalkId)`; repeating the call returns the same walk with 200 (and its current status). `startedAt` is clamped to [now − 12 h, now + 5 min]. If the player has an active walk whose last activity precedes `startedAt`, that walk is finished automatically (`supersededWalkId`, reason `superseded`); if the ranges overlap the request is refused with 409 WALK_OVERLAP. Players without a faction cannot start walks (403 FACTION_REQUIRED). Rate limited: 20 creations per hour per player.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WalkCreateRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/WalkCreateRequest" } }
           }
         },
+        "security": [{ "bearerAuth": [] }],
         "responses": {
-          "201": {
-            "description": "Walk created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkCreated"
-                }
-              }
-            }
-          },
           "200": {
             "description": "Walk already existed for this clientWalkId",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkCreated"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/WalkCreated" } }
+            }
+          },
+          "201": {
+            "description": "Walk created",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/WalkCreated" } }
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Request validation failed (code VALIDATION_FAILED; `details.field` names the offending field, e.g. `samples` for a batch over 200 or `cursor` for a malformed cursor)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "403": {
             "description": "The player has no faction yet (code FACTION_REQUIRED)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "409": {
             "description": "Overlaps the player's active walk (code WALK_OVERLAP, `details.activeWalkId`)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "429": {
-            "$ref": "#/components/responses/RateLimited"
+            "description": "Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       },
       "get": {
-        "tags": [
-          "walks"
-        ],
         "operationId": "listWalks",
         "summary": "The player's walks, newest first",
-        "description": "Cursor pagination over the caller's own walks ordered by start time descending.\n`nextCursor` is opaque; pass it back to get the next page; null when exhausted.\nList items carry no path and no per-hex rows (use GET /v1/walks/{id}).\n",
+        "tags": ["walks"],
+        "description": "Cursor pagination over the caller's own walks ordered by start time descending. `nextCursor` is opaque; pass it back to get the next page; null when exhausted. List items carry no path and no per-hex rows (use GET /v1/walks/{id}).",
         "parameters": [
           {
-            "name": "cursor",
+            "schema": { "maxLength": 200, "type": "string" },
             "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
+            "name": "cursor",
+            "required": false
           },
           {
-            "name": "limit",
+            "schema": { "minimum": 1, "maximum": 50, "default": 20, "type": "integer" },
             "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50,
-              "default": 20
-            }
+            "name": "limit",
+            "required": false
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "One page",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkListPage"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/WalkListPage" } }
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Request validation failed (code VALIDATION_FAILED; `details.field` names the offending field, e.g. `samples` for a batch over 200 or `cursor` for a malformed cursor)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
     },
     "/v1/walks/{id}/samples": {
       "post": {
-        "tags": [
-          "walks"
-        ],
         "operationId": "uploadWalkSamples",
         "summary": "Upload a batch of raw location samples (store only)",
-        "description": "Stores up to 200 samples idempotently by `(walk, seq)`: re-delivered or reordered batches\nnever duplicate rows and never change the final score. The answer reports how many rows\nwere new and a **provisional** result of the shared sample filter (accuracy > 50 m,\nspeed > 5 m/s, non-monotonic timestamp); the finish step re-runs the filter over all\nstored samples. Nothing is scored here. Rate limited: 30 batches per 15 minutes per\nplayer (2 per minute average) and 8 640 stored samples per UTC day.\n",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WalkId"
-          }
-        ],
+        "tags": ["walks"],
+        "description": "Stores up to 200 samples idempotently by `(walk, seq)`: re-delivered or reordered batches never duplicate rows and never change the final score. The answer reports how many rows were new and a **provisional** result of the shared sample filter (accuracy > 50 m, speed > 5 m/s, non-monotonic timestamp); the finish step re-runs the filter over all stored samples. Nothing is scored here. Rate limited: 30 batches per 15 minutes per player (2 per minute average) and 8 640 stored samples per UTC day.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SampleBatchRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/SampleBatchRequest" } }
           }
         },
+        "parameters": [
+          {
+            "schema": { "format": "uuid", "type": "string" },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Batch stored",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SampleBatchResult"
-                },
-                "example": {
-                  "stored": 198,
-                  "duplicates": 2,
-                  "accepted": [
-                    0,
-                    1,
-                    2,
-                    3
-                  ],
-                  "rejected": [
-                    {
-                      "seq": 4,
-                      "reason": "accuracy"
-                    }
-                  ],
-                  "sampleCount": 200
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/SampleBatchResult" } }
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Request validation failed (code VALIDATION_FAILED; `details.field` names the offending field, e.g. `samples` for a batch over 200 or `cursor` for a malformed cursor)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "404": {
-            "$ref": "#/components/responses/WalkNotFound"
+            "description": "Unknown walk id or a walk that belongs to another player (code WALK_NOT_FOUND; never distinguishes the two)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "409": {
             "description": "The walk is no longer active (code WALK_NOT_ACTIVE)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "429": {
             "description": "Batch rate limit (RATE_LIMITED) or daily sample quota (SAMPLE_QUOTA_EXCEEDED); `details.retryAfterS` and the `retry-after` header say how long to wait",
-            "headers": {
-              "retry-after": {
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           }
         }
@@ -1944,145 +1481,320 @@
     },
     "/v1/walks/{id}/finish": {
       "post": {
-        "tags": [
-          "walks"
-        ],
         "operationId": "finishWalk",
         "summary": "Finish the walk and score it (the only scoring path)",
-        "description": "In one transaction: re-run the sample filter over every stored sample, compute walk\nflags, simplify the accepted path (5 m), split it into resolution-9 cells, store the path\nand per-cell metres, set `weekId` to the ISO week (UTC) of the clamped end time\n(max(last accepted sample, min(endedAt, now))). Unflagged walks credit the player's\nfaction per cell for the week (2 000 m cap per player per cell per week) and award 1 XP\nper 100 m (300 XP per day cap). Flagged walks store everything but credit nothing\n(`scored: false`, every `cappedMeters` 0, `xp` 0). Calling finish on an already finished\nwalk returns the stored summary unchanged.\n",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WalkId"
-          }
-        ],
+        "tags": ["walks"],
+        "description": "In one transaction: re-run the sample filter over every stored sample, compute walk flags, simplify the accepted path (5 m), split it into resolution-9 cells, store the path and per-cell metres, set `weekId` to the ISO week (UTC) of the clamped end time (max(last accepted sample, min(endedAt, now))). Unflagged walks credit the player's faction per cell for the week (2 000 m cap per player per cell per week) and award 1 XP per 100 m (300 XP per day cap). Flagged walks store everything but credit nothing (`scored: false`, every `cappedMeters` 0, `xp` 0). Calling finish on an already finished walk returns the stored summary unchanged.",
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WalkFinishRequest"
-              }
-            }
+            "application/json": { "schema": { "$ref": "#/components/schemas/WalkFinishRequest" } }
           }
         },
+        "parameters": [
+          {
+            "schema": { "format": "uuid", "type": "string" },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Authoritative summary",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkSummary"
-                },
-                "example": {
-                  "walkId": "2f9b7c1e-1b2c-4d3e-9f0a-1a2b3c4d5e6f",
-                  "clientWalkId": "6d1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b",
-                  "status": "finished",
-                  "finishReason": "client",
-                  "startedAt": "2026-09-07T08:00:00.000Z",
-                  "endedAt": "2026-09-07T08:35:10.000Z",
-                  "finishedAt": "2026-09-07T08:35:12.417Z",
-                  "weekId": "2026-W37",
-                  "distanceM": 2611.4,
-                  "durationS": 2110,
-                  "steps": 3400,
-                  "sampleCount": 422,
-                  "hexCount": 5,
-                  "xp": 26,
-                  "scored": true,
-                  "flags": [],
-                  "hexes": [
-                    {
-                      "h3": "891f40d1a4fffff",
-                      "meters": 812.3,
-                      "cappedMeters": 812.3,
-                      "weekStanding": {
-                        "leader": 1,
-                        "myFactionShare": 0.64,
-                        "owner": null
-                      }
-                    }
-                  ],
-                  "path": {
-                    "type": "LineString",
-                    "coordinates": [
-                      [
-                        23.932,
-                        54.9035
-                      ],
-                      [
-                        23.9331,
-                        54.9041
-                      ]
-                    ]
-                  }
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/WalkSummary" } }
             }
           },
           "400": {
             "description": "Validation failed, or `endedAt` before `startedAt` (code INVALID_ENDED_AT)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "404": {
-            "$ref": "#/components/responses/WalkNotFound"
+            "description": "Unknown walk id or a walk that belongs to another player (code WALK_NOT_FOUND; never distinguishes the two)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
     },
     "/v1/walks/{id}": {
       "get": {
-        "tags": [
-          "walks"
-        ],
         "operationId": "getWalk",
         "summary": "One of the player's walks with its path and per-hex metres",
+        "tags": ["walks"],
         "description": "Only the owner can read a walk; any other id answers 404 WALK_NOT_FOUND.",
         "parameters": [
           {
-            "$ref": "#/components/parameters/WalkId"
+            "schema": { "format": "uuid", "type": "string" },
+            "in": "path",
+            "name": "id",
+            "required": true
           }
         ],
+        "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": {
             "description": "Walk detail (same shape as the finish summary; `hexes` empty and `path` null while active)",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkSummary"
-                }
-              }
+              "application/json": { "schema": { "$ref": "#/components/schemas/WalkSummary" } }
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           },
           "404": {
-            "$ref": "#/components/responses/WalkNotFound"
+            "description": "Unknown walk id or a walk that belongs to another player (code WALK_NOT_FOUND; never distinguishes the two)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/hexes": {
+      "get": {
+        "operationId": "listHexes",
+        "summary": "Hexagons of one resolution inside a bounding box",
+        "tags": ["territory"],
+        "description": "Returns every hexagon of resolution `res` (5–9) that has a state row and whose polygon intersects `bbox`, sorted by cell id. Res 9 rows carry the owner from the last reckoning and this week's pressure read model (`pressureLeader`, `contested`); res 5–8 rows come from the materialised parent state and carry `pressureLeader: null`, `contested: false`, `ownerSince: null`. Cells that have never been walked are absent. The box may not cross the antimeridian and may not be estimated to contain more than 3000 hexagons of the requested resolution (400 BBOX_TOO_LARGE). Rate limited: 120 requests per minute per player. Sent with `Cache-Control: private, max-age=30`.",
+        "parameters": [
+          {
+            "schema": { "minimum": 5, "maximum": 9, "type": "integer" },
+            "in": "query",
+            "name": "res",
+            "required": true
+          },
+          {
+            "schema": {
+              "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$",
+              "type": "string"
+            },
+            "example": "23.85,54.87,23.98,54.93",
+            "in": "query",
+            "name": "bbox",
+            "required": true,
+            "description": "`minLon,minLat,maxLon,maxLat` in WGS84 degrees; min < max on both axes"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Hexagons in the box",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HexList" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED; `details.field` is `res` or `bbox`) or the box is too large (BBOX_TOO_LARGE; `details.res`, `details.maxCells`, `details.estimatedCells`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "429": {
+            "description": "Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/hexes/{h3}": {
+      "get": {
+        "operationId": "getHex",
+        "summary": "Detail of one resolution-9 hexagon",
+        "tags": ["territory"],
+        "description": "Owner and since when, captain, strength per faction, this week's counted metres and bonuses per faction with the pressure leader and contested flag, the caller's own metres and states (`explored`, `flipped`, `held`), the last eight reckonings (newest first) and `captures` (always empty until feature 006). Any valid resolution-9 cell answers 200 — a never-walked cell has no owner, no strengths and no history.",
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9a-f]{15}$", "type": "string" },
+            "in": "path",
+            "name": "h3",
+            "required": true
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Hex detail",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/HexDetail" } }
+            }
+          },
+          "400": {
+            "description": "Not a resolution-9 cell (VALIDATION_FAILED, `details.field = h3`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reckonings/latest": {
+      "get": {
+        "operationId": "getLatestReckoning",
+        "summary": "The last completed reckoning and the caller’s part in it",
+        "tags": ["territory"],
+        "description": "Week id and run time of the last completed reckoning, when the next one is due (next Monday 00:00 UTC), whether one is in progress, per-faction totals of that week and the caller’s flip count with the flipped cell ids. Before the first reckoning the week fields are null and the totals empty. Sent with `Cache-Control: private, max-age=60`.",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Latest reckoning",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningLatest" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/reckonings/{weekId}": {
+      "post": {
+        "operationId": "runReckoning",
+        "summary": "Run (or preview) the reckoning of one week",
+        "tags": ["admin"],
+        "description": "Role `admin` only. Runs the same code as the scheduled job. `sync: true` runs in the request and answers the result (200); otherwise the job is enqueued (202). `dryRun` (requires `sync`) writes nothing — no state, events, snapshots, XP, pushes, no reckoning row — skips the auto-finish of stale walks, and returns the flips it would have made (≤ 1 000 entries). The week must have ended (400 WEEK_NOT_ENDED) and be the next in sequence after the last completed reckoning (409 RECKONING_OUT_OF_ORDER, `details.expectedWeekId`); a week already done answers its stored result with 200; a reckoning already running answers 409 RECKONING_RUNNING. Synchronous runs are meant for development and test datasets; production sizes should be enqueued.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningRunRequest" } }
+          }
+        },
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+            "in": "path",
+            "name": "weekId",
+            "required": true,
+            "description": "ISO week in UTC"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Ran synchronously (or was already done)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReckoningRunResult" }
+              }
+            }
+          },
+          "202": {
+            "description": "Enqueued for the job worker",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningQueued" } }
+            }
+          },
+          "400": {
+            "description": "Validation failed (VALIDATION_FAILED; `details.field` is `weekId` or `dryRun`) or the week has not ended (WEEK_NOT_ENDED, `details.endsAt`)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "403": {
+            "description": "The caller is not an admin (FORBIDDEN)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "409": {
+            "description": "Out of sequence (RECKONING_OUT_OF_ORDER, `details.expectedWeekId`) or already running (RECKONING_RUNNING)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "503": {
+            "description": "Async run requested while jobs are disabled (JOBS_DISABLED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getReckoning",
+        "summary": "Status of one week's reckoning",
+        "tags": ["admin"],
+        "description": "Role `admin` only. The stored run state, including the resume stage and cursor progress.",
+        "parameters": [
+          {
+            "schema": { "pattern": "^[0-9]{4}-W[0-9]{2}$", "type": "string" },
+            "in": "path",
+            "name": "weekId",
+            "required": true,
+            "description": "ISO week in UTC"
+          }
+        ],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Reckoning status",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReckoningStatus" } }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "403": {
+            "description": "The caller is not an admin (FORBIDDEN)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          },
+          "404": {
+            "description": "No reckoning for this week (RECKONING_NOT_FOUND)",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
     }
   },
-  "servers": [
-    {
-      "url": "http://localhost:3000",
-      "description": "Local development (make dev)"
-    }
-  ],
+  "servers": [{ "url": "http://localhost:3000", "description": "Local development (make dev)" }],
   "tags": [
-    {
-      "name": "ops",
-      "description": "Health and introspection"
-    },
+    { "name": "ops", "description": "Health and introspection" },
     {
       "name": "auth",
       "description": "Sign in with Apple, token refresh, logout (rate limited per client address)"
@@ -2091,13 +1803,12 @@
       "name": "factions",
       "description": "The three factions with live statistics and the suggested faction"
     },
-    {
-      "name": "me",
-      "description": "The signed-in player's profile, faction, deletion and export"
-    },
+    { "name": "me", "description": "The signed-in player's profile, faction, deletion and export" },
     {
       "name": "walks",
       "description": "Walk sessions of the signed-in player (paths are private to their owner)"
-    }
+    },
+    { "name": "territory", "description": "Hex ownership, weekly pressure and reckoning results" },
+    { "name": "admin", "description": "Operator endpoints (role admin)" }
   ]
 }

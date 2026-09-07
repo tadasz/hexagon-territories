@@ -545,9 +545,27 @@ components:
             $ref: "#/components/schemas/WalkHex"
           description: Sorted by h3 ascending; empty while active
         path:
-          oneOf:
-            - $ref: "#/components/schemas/LineString"
-            - type: "null"
+          # Same shape as LineString, written inline as a nullable object: swift-openapi-generator 1.13
+          # drops a `oneOf`/`anyOf` property that contains `{type: "null"}` and, with
+          # additionalProperties: false, the generated client would then reject every response
+          # (apps/ios/VERIFY.md, feature 003; Stream C T027). Semantics unchanged: required, nullable.
+          type: [object, "null"]
+          required: [type, coordinates]
+          additionalProperties: false
+          properties:
+            type:
+              type: string
+              enum: [LineString]
+            coordinates:
+              type: array
+              minItems: 2
+              items:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items:
+                  type: number
+              description: GeoJSON positions [lon, lat]
           description: Simplified accepted path; null while active or with fewer than two accepted samples
 
     WalkListItem:

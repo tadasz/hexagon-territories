@@ -83,8 +83,11 @@ describe('walk limits (plan.md Conventions)', () => {
     expect(backend).toContain('daily walking-XP cap');
     expect(backend).toContain('8 640 samples per day');
     expect(backend).toContain('overlapping-walk guard');
-    // Stream C (tasks.md T028) writes the numbers next to "Protection"; enabled with it:
-    // expect(backend).toContain(`${WALK_XP_DAILY_CAP} XP`);
-    // expect(backend).toContain(`${BATCHES_PER_WINDOW} batches / 15 min`);
+    expect(backend).toContain(`${WALK_XP_DAILY_CAP} XP`);
+    expect(backend).toContain(`${BATCHES_PER_WINDOW} batches / 15 min`);
+    expect(backend).toContain(`${WALKS_PER_HOUR} walks / h`);
+    expect(backend).toContain(`${AUTOFINISH_AFTER_H} h`);
+    expect(backend).toContain(`${SAMPLE_RETENTION_DAYS} days`);
+    expect(backend).toContain('samples.purge');
   });
 });

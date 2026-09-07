@@ -32,7 +32,7 @@ Flagged walks are stored but **excluded from the reckoning** until an admin clea
 1. Build the accepted path as a line string; simplify with Douglas–Peucker (5 m tolerance) to reduce GPS jitter.
 2. Split every segment at res-9 cell boundaries and sum the length inside each cell → `[{cell, metres}]`.
 3. Credit `metres` to `hex_week_contribution(cell, week, faction, player)`. `capped_metres` = min(cumulative player metres in that cell this week, **2 000 m**).
-4. Award player XP: 1 XP per 100 m of accepted path.
+4. Award player XP: 1 XP per 100 m of accepted path (the API additionally caps walking XP at 300 per player per UTC day — an abuse limit in `apps/api/src/modules/walks/limits.ts`, `WALK_XP_DAILY_CAP`, not a scoring constant; flagged walks award nothing).
 5. Return per-cell metres and the current week's standing (leading faction, the player's faction share). **Nothing about ownership changes here.**
 
 The week is the ISO week computed in UTC — one global cutoff, not a per-time-zone one. A walk that finishes at or after Monday 00:00:00 UTC counts for the new week.
