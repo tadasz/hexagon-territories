@@ -160,7 +160,7 @@ Existing fields are kept; this feature adds `files` and fills `sha256`.
       "inputs": "latitude, longitude, week",               // optional free text for non-audio models
       "labels_file": "labels/birdnet-plus-v3-global-10k.txt",   // relative to ml/models/, optional
       "sha256": "…64 hex…" | null,                         // hash of the primary weights file; null = not yet downloaded
-      "role": "primary-on-device" | "primary-server" | "evaluated-fallback" | "evaluation-only",
+      "role": "primary-on-device" | "primary-server" | "evaluated-fallback" | "prototype-fallback" | "evaluation-only",   // prototype-fallback: non-commercial phase only (ADR 0006 addendum)
       "notes": "...",
       "files": [                                           // NEW: every artefact to download/verify
         { "path": "birdnet-plus-v3-global-10k-pruned-fp16.onnx", "url": "https://...", "sha256": "…" | null, "bytes": 12345678 | null, "primary": true },
@@ -177,7 +177,7 @@ Validation (`ml/tests/test_manifest.py`): unique names; `role` in the enum; audi
 
 ## 4. Postgres schema migrated by the API skeleton (`apps/api/drizzle/`)
 
-Everything in `docs/architecture.md` §6. Conventions: `timestamptz` for all timestamps; `uuid` primary keys default `gen_random_uuid()`; `created_at` default `now()`; H3 cells `bigint`; PostGIS `geography(LineString,4326)` for paths and `geometry(Polygon,4326)` for cells; text `week_id` in the form `YYYY-Www`. Drizzle file names in brackets.
+Everything in `docs/architecture.md` §6. Conventions: `timestamptz` for all timestamps; `uuid` primary keys default `gen_random_uuid()`; `created_at` default `now()`; H3 cells `bigint`; PostGIS `geography(LineString,4326)` for paths and `geometry(Polygon,4326)` for cells; text `week_id` in the form `YYYY-Www` (ISO week computed in UTC — one global cutoff, Monday 00:00 UTC). Drizzle file names in brackets.
 
 ### 4.1 Extensions and enums [`schema/enums.ts`, `drizzle/0000_init.sql` header]
 
@@ -189,7 +189,7 @@ Everything in `docs/architecture.md` §6. Conventions: `timestamptz` for all tim
 
 | Table | Columns | Keys / indexes |
 |---|---|---|
-| `factions` | `id smallint`, `slug text not null`, `name text not null`, `emoji text not null`, `color_light text not null`, `color_dark text not null`, `sort smallint not null` | pk `id`; unique `slug`. Seeded by migration `0002_seed_factions.sql`: `(1,'dog-walker','Dog Walker','🐕','#4CAF50','#2E7D32',1)`, `(2,'cat-person','Cat Person','🐱','#2196F3','#1976D2',2)`, `(3,'fox-trainer','Fox Trainer','🦊','#FFC107','#FFA000',3)` (prototype placeholders) |
+| `factions` | `id smallint`, `slug text not null`, `name text not null`, `emoji text not null`, `color_light text not null`, `color_dark text not null`, `sort smallint not null` | pk `id`; unique `slug`. Seeded by migration `0002_seed_factions.sql`: `(1,'owls','Owls','🦉','#4CAF50','#2E7D32',1)`, `(2,'foxes','Foxes','🦊','#FFC107','#FFA000',2)`, `(3,'deer','Deer','🦌','#2196F3','#1976D2',3)`. Names, emoji and colours live only in this seed, so renaming is a data change (a new migration), not a code change; `prototype/index.html` still shows the older placeholder names |
 | `users` | `id uuid`, `apple_sub text not null`, `email text`, `display_name text not null`, `faction_id smallint → factions`, `faction_changed_at timestamptz`, `xp int not null default 0`, `level smallint not null default 1`, `role user_role not null default 'player'`, `created_at`, `last_seen_at timestamptz`, `deleted_at timestamptz` | pk `id`; unique `apple_sub`; index `(faction_id)`; partial index `(deleted_at) where deleted_at is not null` |
 | `refresh_tokens` | `id uuid`, `user_id uuid → users on delete cascade`, `token_hash bytea not null`, `expires_at timestamptz not null`, `revoked_at timestamptz`, `device_id uuid → devices on delete set null` | pk `id`; unique `token_hash`; index `(user_id)` |
 | `devices` | `id uuid`, `user_id uuid → users on delete cascade`, `apns_token text`, `app_version text`, `os_version text`, `model text`, `attested boolean not null default false`, `updated_at timestamptz not null default now()` | pk `id`; unique `apns_token`; index `(user_id)` |
@@ -217,7 +217,8 @@ Everything in `docs/architecture.md` §6. Conventions: `timestamptz` for all tim
 
 | Table | Columns | Keys / indexes |
 |---|---|---|
-| `species` | `id serial`, `kingdom kingdom not null`, `scientific_name text not null`, `common_name_en text`, `common_name_lt text`, `family text`, `gbif_key int`, `birdnet_label text`, `plantnet_id text`, `region_lt boolean not null default false`, `rarity_tier smallint not null default 1`, `image_url text`, `image_license text`, `image_attribution text`, `is_active boolean not null default true` | pk `id`; unique `scientific_name`, `gbif_key`, `birdnet_label`; index `(kingdom, region_lt)` |
+| `species` | `id serial`, `kingdom kingdom not null`, `scientific_name text not null`, `common_name_en text`, `common_name_lt text`, `family text`, `gbif_key int`, `birdnet_label text`, `plantnet_id text`, `rarity_tier smallint not null default 1`, `image_url text`, `image_license text`, `image_attribution text`, `is_active boolean not null default true` | pk `id`; unique `scientific_name`, `gbif_key`, `birdnet_label`; index `(kingdom)` |
+| `species_region` | `species_id int → species on delete cascade`, `region_code text not null` (lower-case ISO 3166-1 alpha-2, e.g. `lt`) | pk `(species_id, region_code)`; index `(region_code, species_id)`. Per-region presence flag used by `GET /v1/species?region=`; `lt` is the first seeded region, further regions are added as players appear (play area is worldwide; the Geomodel gates by actual location) |
 | `species_season` | `species_id int → species on delete cascade`, `week smallint not null`, `present boolean not null` | pk `(species_id, week)`; check `week between 1 and 53` |
 | `captures` | `id uuid`, `user_id uuid → users`, `client_capture_id uuid not null`, `walk_id uuid → walk_sessions on delete set null`, `kind kingdom not null`, `faction_id smallint → factions`, `h3_r9 bigint not null`, `week_id text not null`, `lat double precision not null`, `lon double precision not null`, `captured_at timestamptz not null`, `media_key text`, `media_type text`, `media_bytes int`, `device_model_version text`, `device_species_id int → species`, `device_confidence real`, `cloud_provider text`, `cloud_model_version text`, `cloud_species_id int → species`, `cloud_confidence real`, `cloud_raw jsonb`, `final_species_id int → species`, `status capture_status not null default 'created'`, `bonus_m real not null default 0`, `verified_at timestamptz`, `created_at` | pk `id`; unique `(user_id, client_capture_id)`; index `(user_id, created_at desc)`; index `(h3_r9)`; partial index `(status, created_at) where status in ('uploaded','verifying')` (verification queue) |
 | `capture_candidates` | `capture_id uuid → captures on delete cascade`, `source candidate_source not null`, `rank smallint not null`, `species_id int → species`, `raw_label text not null`, `confidence real not null` | pk `(capture_id, source, rank)` |
@@ -228,7 +229,7 @@ Everything in `docs/architecture.md` §6. Conventions: `timestamptz` for all tim
 | Table | Columns | Keys / indexes |
 |---|---|---|
 | `points_ledger` | `id bigserial`, `user_id uuid → users`, `faction_id smallint → factions`, `kind ledger_kind not null`, `points int not null`, `ref_type text`, `ref_id text`, `h3_r9 bigint`, `week_id text`, `created_at` | pk `id`; index `(user_id, created_at desc)`; index `(week_id, faction_id)`; index `(h3_r9)` |
-| `streaks` | `user_id uuid → users on delete cascade`, `current_days int not null default 0`, `longest_days int not null default 0`, `last_active_date date`, `tz text not null default 'Europe/Vilnius'` | pk `user_id` |
+| `streaks` | `user_id uuid → users on delete cascade`, `current_days int not null default 0`, `longest_days int not null default 0`, `last_active_date date`, `tz text not null default 'UTC'` (the player's local IANA zone, set from the device; streaks are the only local-time rule — weeks and reckonings use UTC) | pk `user_id` |
 | `leaderboard_snapshots` | `week_id text`, `scope text not null` (`global` \| `faction` \| `hex_r7`), `scope_id text not null default ''`, `rank int not null`, `user_id uuid → users`, `meters real not null default 0`, `points int not null default 0`, `computed_at timestamptz not null default now()` | pk `(week_id, scope, scope_id, rank)`; index `(user_id, week_id)` |
 | `faction_stats_weekly` | `week_id text`, `faction_id smallint → factions`, `hexes_owned_r9 int not null default 0`, `hexes_owned_r7 int not null default 0`, `meters real not null default 0`, `active_users int not null default 0`, `captures int not null default 0` | pk `(week_id, faction_id)` |
 | `anti_cheat_flags` | `id bigserial`, `user_id uuid → users`, `walk_id uuid → walk_sessions on delete set null`, `capture_id uuid → captures on delete set null`, `code text not null`, `details jsonb not null default '{}'`, `created_at`, `resolved_at timestamptz`, `resolution text` | pk `id`; index `(user_id)`; partial index `(created_at) where resolved_at is null` |

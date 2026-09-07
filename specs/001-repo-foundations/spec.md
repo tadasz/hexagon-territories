@@ -55,7 +55,7 @@ An iOS engineer or agent generates the Xcode project, builds the app, and sees a
 **Acceptance Scenarios**:
 
 1. **Given** the repo, **When** `xcodegen generate` runs, **Then** an Xcode project with the app target and the local packages `H3Kit`, `TerritoryRules`, `DesignSystem`, `MapFeature` opens without warnings about missing files.
-2. **Given** the app launches in the simulator, **When** the Map tab is shown, **Then** a MapLibre map renders the Protomaps style centred on Kaunas at zoom 12.
+2. **Given** the app launches in the simulator, **When** the Map tab is shown, **Then** a MapLibre map renders the OpenFreeMap `liberty` style centred on Kaunas at zoom 12.
 3. **Given** `H3Kit`, **When** its tests run, **Then** `latLngToCell`, `cellToParent`, `cellToBoundary` and `polygonToCells` agree with the fixtures.
 4. **Given** Xcode Cloud is connected, **When** a pull request is opened, **Then** the PR workflow builds the app and runs the unit tests using `ci_scripts/ci_post_clone.sh`.
 
@@ -67,12 +67,12 @@ A new contributor or agent can read why the stack looks the way it does, and whi
 
 **Why this priority**: Prevents re-litigating decisions and guards Constitution Principle III.
 
-**Independent Test**: `docs/adr/` contains ADRs 0001–0010; `ml/models/manifest.json` lists BirdNET+ V3, Geomodel and Perch v2 with licence and hash; `docs/licences.md` lists Protomaps/OpenStreetMap, Pl@ntNet and BirdNET attribution text.
+**Independent Test**: `docs/adr/` contains ADRs 0001–0010; `ml/models/manifest.json` lists BirdNET+ V3, Geomodel and Perch v2 with licence and hash; `docs/licences.md` lists OpenFreeMap/OpenStreetMap, Pl@ntNet and BirdNET attribution text.
 
 **Acceptance Scenarios**:
 
 1. **Given** `ml/models/manifest.json`, **When** the model download script runs, **Then** the files are fetched into `apps/ios/Resources/Models` via git-lfs and their sha256 matches the manifest.
-2. **Given** the licence inquiries to Cornell (BirdNET V2.4 commercial terms) and Pl@ntNet (Pro plan), **When** the feature is converged, **Then** the sent dates and contacts are recorded in `docs/licences.md`.
+2. **Given** the licence inquiries to Cornell (BirdNET V2.4 commercial terms — optional until monetisation, draft only) and Pl@ntNet (Pro plan), **When** the feature is converged, **Then** the sent dates and contacts are recorded in `docs/licences.md`.
 
 ---
 
@@ -121,4 +121,4 @@ A new contributor or agent can read why the stack looks the way it does, and whi
 - Model weights are stored with git-lfs; the repository has LFS enabled on GitHub.
 - No Apple Developer Program capabilities beyond the basic app identifier are needed in this feature (Sign in with Apple arrives in 002).
 - The Postgres image is built from `postgis/postgis:16-3.4` with h3-pg installed from PGXN.
-- Faction names remain the prototype's placeholders until branding is decided.
+- Faction names are Owls, Foxes and Deer, seeded in the `factions` table (`data-model.md` §4.2); renaming is a data change.

@@ -1,6 +1,8 @@
 # MVP definition
 
-**One sentence**: a Kaunas walker signs in, picks a faction, walks with the app, sees their path and the metres they earned in each hexagon, captures birds by sound along the way, and on Monday morning learns which hexagons their faction won.
+**One sentence**: a walker signs in, picks a faction, walks with the app, sees their path and the metres they earned in each hexagon, captures birds by sound along the way, and on Monday morning learns which hexagons their faction won.
+
+**Beta market: Lithuania (Kaunas); play area: worldwide.** Kaunas is where the beta is tested, not a boundary — hexes are scored wherever a player walks, and species gating follows the player's actual location.
 
 The MVP is Spec Kit features **001–006** plus the minimum of 009 needed for a public TestFlight (≈ 14 weeks with three people). Bird capture is in because it is the nature-explorer differentiator and runs on-device; plants come first after the MVP because they depend on a paid third-party API and add a second capture flow.
 
@@ -8,9 +10,9 @@ The MVP is Spec Kit features **001–006** plus the minimum of 009 needed for a 
 
 | In the MVP | Not in the MVP (next releases) |
 |---|---|
-| Sign in with Apple, faction pick (3 factions, placeholder names) | Faction switching, friends, social sharing |
+| Sign in with Apple, faction pick (Owls 🦉 / Foxes 🦊 / Deer 🦌; the faction with the fewest active players is pre-selected) | Faction switching, friends, social sharing |
 | Walk sessions with background tracking, live path, per-hex metres HUD, offline outbox, walk history with paths | Routes, guided trails, step goals |
-| `finishWalk` scoring, weekly reckoning (decay + ownership), contested indicator, parent rollup | Underdog multiplier, seasons/resets, NPC seeding |
+| `finishWalk` scoring, weekly reckoning (decay + ownership), contested indicator, parent rollup | Underdog multiplier (post-launch idea), seasons/resets, NPC seeding |
 | Hex map (res 5–9), own-paths layer, hex detail with weekly history | Server MVT tiles, heatmaps, other players' paths |
 | Bird listening + on-device ID (BirdNET+ V3), capture + cloud verification, bird field guide, capture bonus metres | Plant capture (007), on-device plant model (010) |
 | Basic profile: explored / flipped / held, distance, birds captured; Monday results push | XP levels, streaks, leaderboards, achievements, admin panel, App Attest (008) |

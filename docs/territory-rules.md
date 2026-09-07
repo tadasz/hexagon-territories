@@ -6,7 +6,8 @@ Single source of truth for the game's territory mechanics. Constants are mirrore
 
 - **Cell**: an H3 resolution-9 hexagon (~0.105 km², ~174 m edge). All scoring happens at res 9.
 - **Parent**: the res 8–5 hexagon containing a cell; parents are materialised for the map, never scored directly.
-- **Contribution**: metres of a player's accepted walk path inside a cell, credited to the player's faction for the ISO week in which the walk finished.
+- **Week**: the ISO week (`YYYY-Www`) computed in UTC. One global cutoff, Monday 00:00 UTC, wherever the player is.
+- **Contribution**: metres of a player's accepted walk path inside a cell, credited to the player's faction for the week (UTC) in which the walk finished.
 - **Strength**: a faction's accumulated, decayed contribution in a cell. Only the weekly reckoning updates strength.
 - **Owner**: the faction that held the highest strength at the most recent reckoning.
 - **Reckoning**: the weekly job that applies decay, adds the week's contributions, and decides owners.
@@ -34,7 +35,7 @@ Flagged walks are stored but **excluded from the reckoning** until an admin clea
 4. Award player XP: 1 XP per 100 m of accepted path.
 5. Return per-cell metres and the current week's standing (leading faction, the player's faction share). **Nothing about ownership changes here.**
 
-The week is the ISO week in `Europe/Vilnius`. A walk that finishes after Sunday 23:59:59 local counts for the following week.
+The week is the ISO week computed in UTC — one global cutoff, not a per-time-zone one. A walk that finishes at or after Monday 00:00:00 UTC counts for the new week.
 
 ## Capture bonuses
 
@@ -51,7 +52,7 @@ Bonuses are not subject to the 2 000 m walking cap.
 
 ## Weekly reckoning (`reckoning.weekly`)
 
-Runs once per week, Monday 00:00 `Europe/Vilnius`, for week W that just ended. It is the only code path that changes ownership.
+Runs once per week at Monday 00:00 UTC (cron `0 0 * * 1`, one global cutoff for all players), for week W that just ended. It is the only code path that changes ownership.
 
 For every cell with existing strength or contributions in W, per faction:
 
@@ -99,10 +100,10 @@ The job is idempotent per week: re-running for W is a no-op.
 | Rule | Default |
 |---|---|
 | Faction switch | once per 30 days; XP kept; past contributions stay with the old faction |
-| Streak | one finished walk ≥ 500 m or one verified capture per local day; one freeze per 7-day streak |
+| Streak | one finished walk ≥ 500 m or one verified capture per local day (the player's own time zone, `streaks.tz`; streaks are the only rule that uses local time — weeks and reckonings use UTC); one freeze per 7-day streak |
 | Player XP for captures | bird 30, plant 20, first-of-species +50, rarity multiplier ×1 / ×1.5 / ×2 / ×3 |
 | Levels | XP threshold for level L = `100 × L^1.6` |
-| Balance (proposed, not yet approved) | suggest the smallest faction at sign-up; ×1.25 metres for a faction owning < 20 % of claimed res-7 cells |
+| Balance | at sign-up the app pre-selects the faction with the fewest active players (the player may pick another). No underdog multiplier in the MVP; a multiplier is a post-launch idea (`docs/roadmap.md`) |
 
 ## Constants summary
 
@@ -118,6 +119,6 @@ MIN_STRENGTH_M = 500
 HYSTERESIS = 0.10
 PARENT_PLURALITY = 0.40
 PARENT_MIN_CLAIMED_CHILDREN = 2
-RECKONING_CRON = "0 22 * * 0"   # UTC; Monday 00:00/01:00 Europe/Vilnius
-TZ = "Europe/Vilnius"
+RECKONING_CRON = "0 0 * * 1"    # UTC; Monday 00:00 UTC, one global cutoff
+TZ = "UTC"                      # week ids and the reckoning; streaks use the player's local zone (streaks.tz)
 ```

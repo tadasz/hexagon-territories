@@ -62,7 +62,7 @@ make test                                 # rules + API tests against the runnin
 make down
 ```
 
-API logs at startup contain `reckoning.weekly scheduled (0 22 * * 0 UTC)`; a manual trigger (`pnpm --filter @nature/api run job:reckoning`) logs `reckoning.weekly: no work`.
+API logs at startup contain `reckoning.weekly scheduled (0 0 * * 1 UTC)`; a manual trigger (`pnpm --filter @nature/api run job:reckoning`) logs `reckoning.weekly: no work`.
 
 Without Docker (agent containers):
 
@@ -92,6 +92,8 @@ xcodebuild test -scheme NatureExplorer -destination 'platform=iOS Simulator,name
 open NatureExplorer.xcodeproj                       # run: five tabs; Map tab shows Kaunas at zoom 12 with a basemap
 ```
 
+The bundle id in `project.yml` is the placeholder `com.natureexplorer.app` (`TODO(owner)`, brand not named yet).
+
 Xcode Cloud (after the owner connects the repo): the PR workflow runs `ci_scripts/ci_post_clone.sh` (installs XcodeGen and git-lfs, generates the project, pulls LFS) and the unit tests pass in < 20 min.
 
 ## D. Models and licences (User Story 4)
@@ -119,4 +121,10 @@ export SPECIFY_FEATURE=001-repo-foundations SPECIFY_FEATURE_DIRECTORY=specs/001-
 .specify/scripts/bash/check-prerequisites.sh --json --include-tasks   # lists plan, research, data-model, contracts, quickstart, tasks
 ```
 
-Then run `/speckit-analyze` and `/speckit-converge` until Converged (SC-004). Phase 0 exit criteria (`docs/roadmap.md`): `pnpm test` green on GitHub Actions, `xcodebuild test` green on Xcode Cloud, identical fixture results in TS and Swift, `make dev` runs API + DB.
+Then run `/speckit-analyze` and `/speckit-converge` until Converged (SC-004).
+
+## Owner actions
+
+- `TODO(owner)`: replace the placeholder bundle id `com.natureexplorer.app` in `apps/ios/project.yml` once the brand is named (see `plan.md` "Owner actions").
+- Connect the repository to Xcode Cloud; enable git-lfs.
+- Send the Pl@ntNet Pro inquiry; the Cornell BirdNET V2.4 inquiry is optional until monetisation. Phase 0 exit criteria (`docs/roadmap.md`): `pnpm test` green on GitHub Actions, `xcodebuild test` green on Xcode Cloud, identical fixture results in TS and Swift, `make dev` runs API + DB.

@@ -1,5 +1,5 @@
 {
-  "$comment": "Every model used on device or server. Feature 001 fills in sha256 after download. Licence must be permissive for release builds (Constitution III).",
+  "$comment": "Every model used on device or server. Feature 001 fills in sha256 after download. Licence must be permissive for primary-* roles (Constitution III); a non-commercial model may carry role prototype-fallback only while the app is non-commercial (ADR 0006 addendum).",
   "models": [
     {
       "name": "birdnet-plus-v3-global-10k-pruned-fp16",
@@ -28,7 +28,7 @@
       "inputs": "latitude, longitude, week",
       "sha256": null,
       "role": "primary-on-device",
-      "notes": "Gates classifier output by regional presence; also used server-side to build species.region_lt and species_season."
+      "notes": "Gates classifier output by regional presence for the player's actual location (global); also used server-side to build species_region and species_season."
     },
     {
       "name": "perch-v2",
@@ -54,8 +54,8 @@
       "sample_rate_hz": 48000,
       "window_seconds": 3.0,
       "sha256": null,
-      "role": "evaluation-only",
-      "notes": "Used only in the eval harness and the server-side verification worker during development."
+      "role": "prototype-fallback",
+      "notes": "Non-commercial phase only (ADR 0006 addendum): may run on device and in the server-side verification worker as a fallback while the app is non-commercial; must be removed or licensed from Cornell before any monetisation. BirdNET+ V3 stays primary."
     }
   ]
 }

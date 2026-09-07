@@ -4,7 +4,7 @@
 |---|---|---|
 | 0001 | Native iOS app with SwiftUI | accepted |
 | 0002 | TypeScript API on Postgres/PostGIS | accepted |
-| 0003 | MapLibre Native with self-hosted Protomaps tiles | accepted |
+| 0003 | MapLibre Native with hosted OpenFreeMap vector tiles (self-hosted Protomaps as an option) | accepted (addendum 2026-09-07) |
 | 0004 | Metres-walked scoring at walk finish, weekly reckoning for ownership | accepted |
 | 0005 | GitHub Spec Kit as the development process | accepted |
 | 0006 | Bird recognition on BirdNET+ V3 (Apache 2.0) with swappable fallbacks | accepted |

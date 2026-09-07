@@ -13,15 +13,16 @@ Create each feature with the exact number and short name below so directories an
 | # | Short name | Scope | Depends on |
 |---|---|---|---|
 | 001 | repo-foundations | Monorepo layout, territory-rules + fixtures (TS and Swift), Postgres image, API skeleton, XcodeGen app shell with MapLibre map, CI (Xcode Cloud + GitHub Actions), ADRs, model downloads and licence inquiries | — |
-| 002 | auth-and-factions | Sign in with Apple, JWT + refresh, faction pick, profile, account deletion | 001 |
+| 002 | auth-and-factions | Sign in with Apple, JWT + refresh, faction pick with smallest-faction suggestion (pre-select the faction with the fewest active players), profile, account deletion | 001 |
 | 003 | walk-tracking | Walk sessions, background location, path recording, live per-hex metres estimate, offline outbox, `finishWalk` with authoritative metres, walk history | 002 |
 | 004 | weekly-reckoning | Contributions, weekly decay, ownership with hysteresis, captains, parent rollup, contested read model, results push, idempotency, `walk-sim --reckon` | 003 |
-| 005 | hex-map | MapLibre map, Protomaps basemap, hex overlay by resolution with cross-fade, own-paths layer, hex detail sheet with weekly history | 004 |
+| 005 | hex-map | MapLibre map, OpenFreeMap basemap (light/dark styles), hex overlay by resolution with cross-fade, own-paths layer, hex detail sheet with weekly history | 004 |
 | 006 | bird-capture | Audio pipeline, BirdNET+ V3 + Geomodel on device via ONNX Runtime, listening UI, clip upload, Python verification worker, bird field guide, capture bonus, eval set | 003 |
 | 007 | plant-capture | Camera flow with organ tags, Pl@ntNet integration, confirm UI, plant field guide, offline queue, Pl@ntNet Pro | 006 |
 | 008 | game-layer | XP/levels, streaks, weekly + all-time leaderboards, faction stats, "hex lost"/"dethroned" pushes, MVT hex tiles, App Attest, anti-cheat flags + admin pages, achievements v1 | 004, 006, 007 |
 | 009 | release | Onboarding, permission priming, Lithuanian localisation, accessibility, privacy manifest, data export, reviewer notes + video, Xcode Cloud release workflow, App Store submission | 008 |
 | 010 | plant-on-device | Core ML classifier for ~300 common Lithuanian taxa, live viewfinder hints, provisional offline entries | 007 |
+| 011 | android | Android app as a new feature series after the App Store release, reusing the API and the TypeScript territory rules (Kotlin port runs the same `packages/h3-fixtures`) | 009 |
 
 Features 006 and 004/005 are independent; agents can run them in parallel.
 
@@ -35,7 +36,9 @@ Features 006 and 004/005 are independent; agents can run them in parallel.
 | 3 — Plant capture | 007 | 4 | 90 % of test photos decided < 10 s online; queued photos resolve on reconnect | Mid-confidence UX; API quota; duplicate-photo farming |
 | 4 — Game layer | 008 | 5 | Reckoning for 10 000 cells < 5 min; App Attest enforced; load test with 200 concurrent walkers passes | Notification fatigue; leaderboard cheating; tile cache invalidation |
 | 5 — Release | 009 | 4 | Approved on the App Store; D7 retention and crash-free tracked | Review guidelines 5.1.5 / 2.5.4; attribution completeness |
-| Post-launch | 010 | 3 | On-device top-3 ≥ 0.8 on the plant eval set | Dataset licensing |
+| Post-launch | 010, 011 | 3 + TBD | On-device top-3 ≥ 0.8 on the plant eval set; Android beta reusing the API with fixture parity | Dataset licensing; a third rules implementation to keep in parity |
+
+Post-launch ideas, not scheduled: an underdog multiplier (e.g. ×1.25 metres for a faction owning < 20 % of claimed res-7 cells) — the MVP balances only by pre-selecting the smallest faction at sign-up (`docs/territory-rules.md`).
 
 Total ≈ 27 weeks with three people; assume 32–34 with two.
 

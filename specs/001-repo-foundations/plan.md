@@ -38,7 +38,7 @@ Turn the planning repository into the monorepo of `docs/architecture.md` §3 and
 |---|---|---|
 | I. Server-authoritative game state | PASS | No scoring code path exists yet; the rules package is pure and side-effect free. `hex_state.owner_faction_id` is written by no code in this feature (the `reckoning.weekly` skeleton logs "no work"). |
 | II. One place for each rule | PASS | Constants live in `packages/territory-rules/src/config.ts` and mirror `docs/territory-rules.md` "Constants summary" one-to-one; `TerritoryRules` (Swift) mirrors them; both suites read `packages/h3-fixtures/fixtures/*.json`. Fixture generator is checked in; fixtures are hand-reviewed. |
-| III. Licence before ship | PASS | Every model in `ml/models/manifest.json` already has a licence; this feature adds sha256 + download script and adds rows to `docs/licences.md` for the development basemap (OpenFreeMap) and H3 vendored source. No non-commercial weights are referenced by iOS code (no audio package in 001). |
+| III. Licence before ship | PASS | Every model in `ml/models/manifest.json` already has a licence; this feature adds sha256 + download script and adds rows to `docs/licences.md` for the OpenFreeMap basemap and H3 vendored source. No non-commercial weights are referenced by iOS code (no audio package in 001); BirdNET V2.4 carries role `prototype-fallback` (allowed only while the app is non-commercial, ADR 0006 addendum). |
 | IV. Privacy by default | PASS | Schema includes 30-day partitioned `location_samples`; no analytics SDK is added in 001. |
 | V. Test at the layer you touch | PASS | Rules: fixture-driven unit tests (TS + Swift). API: integration test against the real Postgres image (Testcontainers / `DATABASE_URL`) plus unit tests. iOS: XCTest per package. `quickstart.md` is executable. CI red blocks merge. |
 | VI. Small, mergeable steps | PASS | Tasks are grouped into streams on disjoint paths; each task is one PR-sized unit with an acceptance check. |
@@ -133,7 +133,7 @@ docs/licences.md                           # Stream D (rows + inquiry log update
 | TS fixtures package | `@nature/h3-fixtures` (`packages/h3-fixtures`) |
 | API workspace | `@nature/api` (`apps/api`) |
 | Swift packages | `H3Kit` (products `H3Kit`, C target `CH3`), `TerritoryRules`, `DesignSystem`, `MapFeature` |
-| Xcode app target / scheme | `NatureExplorer` (bundle id `app.dogo.natureexplorer`, placeholder until the owner sets the App ID) |
+| Xcode app target / scheme | `NatureExplorer` (bundle id `com.natureexplorer.app` — `TODO(owner)`: placeholder; the app is a separate brand the owner has not named yet) |
 | Postgres image tag | `nature-postgres:16-3.4-h3` (built from `infra/docker/postgres`) |
 | Compose services | `postgres`, `minio`, `api` |
 | pg-boss job | `reckoning.weekly` |
@@ -162,16 +162,26 @@ Defined once here so Stream A (TypeScript) and Stream C (Swift) implement the sa
 | Deviation | Justification |
 |---|---|
 | iOS shell has **five** tabs (Map, Walk, Capture, Collection, Profile), not the six in §4 | `spec.md` FR-007 says five; Factions arrives with feature 002 (auth-and-factions), which owns faction UI. |
-| MapFeature's default style URL is the OpenFreeMap "liberty" style (OSM data, no key) instead of the Protomaps PMTiles extract from our bucket | The object-storage bucket and the Lithuania PMTiles extract are provisioned in feature 005 (hex-map). The style URL is a single configuration value (`MapConfig.styleURL`), so switching is a one-line change. OSM attribution is already listed in `docs/licences.md`; Stream D adds the OpenFreeMap row. |
 | GitHub Actions starts the Postgres image with `docker build` + `docker run` in the job instead of a `services:` container | The h3-pg image is built from `infra/docker/postgres` and is not published to a registry yet; `services:` can only pull images. Behaviour is the same (tests hit `DATABASE_URL`). Publishing to GHCR is a follow-up once the repository is public or a package token exists. |
 | API tests can run without Docker (`SKIP_DB_TESTS=1`) | Agent containers and some laptops have no Docker; unit tests must stay useful. CI always runs the DB tests. |
 | `packages/api-schema` is not created | Nothing consumes a generated client yet; the API serves `/openapi.json` at runtime and `contracts/openapi.yaml` is the reviewed fragment. Feature 002 creates the package when `swift-openapi-generator` is wired. |
 | `ml/scripts/download_models.py` writes to `ml/models/cache/` (gitignored) by default, not directly to `apps/ios/Resources/Models` | Keeps stream D off stream C's paths; `--dest apps/ios/Resources/Models` copies the verified files for the LFS commit, which is done in Stream E by whoever has git-lfs. |
 | Sample rejection reason `non_monotonic` is checked before accuracy | The rules table does not define an order; fixing one avoids TS/Swift divergence on samples that fail two checks. |
 
+MapFeature's OpenFreeMap `liberty` default style URL was previously listed here as a deviation; since the ADR 0003 addendum (global play area, hosted OpenFreeMap tiles) it is the agreed basemap and no longer a deviation. `MapConfig.styleURL` stays a single configuration value so a self-hosted PMTiles style can be swapped in later.
+
 ## Complexity Tracking
 
 No constitution violations to justify. The deviations above are scope/sequencing choices, not added complexity.
+
+## Owner actions
+
+Decisions only the product owner can make; agents use the placeholders until then.
+
+1. **Bundle identifier / App ID** — `TODO(owner)`: the app is a separate brand that is not named yet; `com.natureexplorer.app` is the placeholder in `apps/ios/project.yml` and must be replaced before the first TestFlight upload.
+2. Connect the GitHub repository to Xcode Cloud (see `research.md` open items).
+3. Enable git-lfs on the repository and commit the model weights.
+4. Send the Pl@ntNet Pro inquiry; the Cornell BirdNET V2.4 inquiry is optional until monetisation.
 
 ## Environment notes for implementation agents
 

@@ -4,11 +4,11 @@ The agreed system design for Nature Explorer. Spec Kit `plan.md` files reference
 
 ## 1. Product shape
 
-- Native iOS app (SwiftUI). Android is a later, separate effort.
-- Three factions (placeholder names from the prototype: Dog Walker 🐕 green, Cat Person 🐱 blue, Fox Trainer 🦊 amber).
+- Native iOS app (SwiftUI). Android follows the App Store release as a new feature series that reuses the API and the TypeScript territory rules (`docs/roadmap.md`, post-launch).
+- Three nature-themed factions: **Owls** 🦉 green (`#4CAF50` / `#2E7D32`), **Foxes** 🦊 amber (`#FFC107` / `#FFA000`), **Deer** 🦌 blue (`#2196F3` / `#1976D2`). Names, emoji and colours live in the `factions` seed (`specs/001-repo-foundations/data-model.md` §4.2), so renaming is a data change; `prototype/index.html` still shows the older placeholder names. Balance in the MVP: at sign-up the app pre-selects the faction with the fewest active players; there is no underdog multiplier.
 - Territory: H3 resolution-9 cells scored by metres walked inside them at walk finish; ownership decided and decayed once per week by a reckoning job.
 - Captures: birds by sound (on-device first, cloud verification), plants by photo (cloud first).
-- First market: Lithuania (Kaunas).
+- Play area: anywhere in the world — hexes are scored wherever the player walks. Beta market: Lithuania (Kaunas); it is a test market, not a boundary.
 
 ## 2. Stack
 
@@ -16,7 +16,7 @@ The agreed system design for Nature Explorer. Spec Kit `plan.md` files reference
 |---|---|---|
 | iOS app | Swift 6, SwiftUI, iOS 17+, MVVM with `@Observable`, feature modules as local Swift packages | Shippable by a small team; package boundaries give isolated tests. *TCA.* |
 | Project generation | XcodeGen (`project.yml`) + local SPM packages | No `.pbxproj` merge conflicts. *Tuist.* |
-| Maps | MapLibre Native iOS wrapped in our own `UIViewRepresentable`; Protomaps PMTiles Lithuania extract served from the object-storage bucket (light/dark styles) | GPU rendering of 5k+ hex polygons, data-driven faction colours, line layers for walk paths. *MapKit rejected: no data-driven styling, `MKMultiPolygon` is UIKit-only.* |
+| Maps | MapLibre Native iOS wrapped in our own `UIViewRepresentable`; hosted global vector tiles from OpenFreeMap (OpenStreetMap data, free, no API key; styles `liberty` / `bright` for light/dark) | GPU rendering of 5k+ hex polygons, data-driven faction colours, line layers for walk paths; a worldwide play area needs a global basemap, not a country extract. *MapKit rejected: no data-driven styling, `MKMultiPolygon` is UIKit-only. Self-hosting a Protomaps PMTiles extract in our bucket remains a later option (ADR 0003 addendum).* |
 | H3 on iOS | Vendored Uber H3 C core as an SPM C target with a thin Swift wrapper (`H3Kit`) | Same indexes as the server; no official Swift binding exists. |
 | Local persistence | GRDB (SQLite) | Offline outbox and background bulk writes. *SwiftData.* |
 | Location | Core Location `CLLocationUpdate.liveUpdates(.fitness)` + `CLBackgroundActivitySession` during walks; `CMPedometer` as a plausibility signal | When-In-Use authorisation only; foreground-started sessions. |
@@ -24,7 +24,7 @@ The agreed system design for Nature Explorer. Spec Kit `plan.md` files reference
 | ML server | Python worker running BirdNET FP32 + Geomodel for verification; Pl@ntNet API for plants | Only supported server path for BirdNET. |
 | API | Node 22, TypeScript, Fastify 5, TypeBox schemas → OpenAPI, Drizzle ORM, pg-boss jobs | Schema-first feeds `swift-openapi-generator`; Postgres-backed jobs, no Redis. *Go + h3-go + sqlc.* |
 | Database | Postgres 16 + PostGIS 3.4 (+ h3-pg where available) | Path clipping (`ST_Intersection`, `ST_Length`), MVT, bbox queries. |
-| Object storage | Hetzner Object Storage (S3-compatible) via presigned URLs; MinIO locally | Clips (~50 KB), photos (~300 KB), the ~200 MB PMTiles basemap; media never passes through the API. *Cloudflare R2 if egress grows.* |
+| Object storage | Hetzner Object Storage (S3-compatible) via presigned URLs; MinIO locally | Clips (~50 KB), photos (~300 KB); media never passes through the API. A self-hosted PMTiles basemap would live here too if we ever switch away from OpenFreeMap. *Cloudflare R2 if egress grows.* |
 | Hosting | Hetzner VPS (Helsinki) + Docker Compose (api, worker, postgres, caddy) | EU residency, one vendor. *Fly.io + Neon.* |
 | Auth | Sign in with Apple → Apple JWKS verification → JWT access (15 min) + rotating refresh token in Keychain | App Store requirement; no passwords. |
 | Push | APNs token auth | Reckoning results, hex lost, verification results, streaks. |
@@ -92,7 +92,7 @@ Tooling: pnpm workspaces + turborepo for `apps/api` and `packages/*`; Drizzle Ki
 Viewfinder or `PhotosPicker`, organ chips (leaf/flower/fruit/bark) → 1280 px JPEG with EXIF stripped except orientation → outbox → server returns top-3 → auto-accept or user confirmation. Feature 010 adds a Core ML preview classifier.
 
 ### Map
-- `MapLibreView: UIViewRepresentable` around `MLNMapView`; style JSON served from the bucket (light/dark; border colour per style as in the prototype).
+- `MapLibreView: UIViewRepresentable` around `MLNMapView`; style URL from `MapConfig` (OpenFreeMap `liberty` / `bright` for light/dark; hex border colour per style as in the prototype). Attribution "© OpenStreetMap contributors, © OpenFreeMap" is always visible.
 - `HexOverlayController`: `MLNShapeSource` plus fill and line layers per resolution bucket (res 5–9); fill colour by owner faction, opacity 0.3; a hatched or pulsing outline when the cell is contested this week.
 - On `regionDidChange` (debounced 150 ms): resolution from zoom (the prototype's table, now in `territory-rules`), `polygonToCells(viewport + 10 %)`, diff against `hex_cache`, fetch from `GET /v1/hexes`, build GeoJSON with `cellToBoundary`; cross-fade on resolution switch (1.2 s in, 0.6 s out). Tap flies to the cell one zoom level in; long-press opens the hex detail sheet. Client polyfill capped at 3 000 cells.
 - `WalkPathsLayer`: the player's own recent walks (last 4 weeks) as a line layer coloured by faction, toggleable. Other players' raw paths are never shown; hex detail shows aggregated metres per faction instead.
@@ -102,7 +102,7 @@ Viewfinder or `PhotosPicker`, organ chips (leaf/flower/fruit/bark) → 1280 px J
 
 **Fastify modules**: `auth`, `users`, `factions`, `walks`, `territory` (reckoning, hex reads, tiles), `captures`, `species`, `collection`, `leaderboards`, `push`, `admin`. Rules are imported from `packages/territory-rules`.
 
-**Jobs (pg-boss)**: `walk.autofinish` (hourly), `reckoning.weekly` (cron `0 22 * * 0` UTC; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (daily, > 30 days), `push.send`, `species_mask.refresh` (weekly).
+**Jobs (pg-boss)**: `walk.autofinish` (hourly), `reckoning.weekly` (cron `0 0 * * 1` UTC — Monday 00:00 UTC, one global cutoff for all players; singleton, resumable per cell batch), `parent.recompute` (inside reckoning; nightly full re-derivation), `capture.verify` (retry 5×), `leaderboard.rollup` (after reckoning and every 10 min for live weekly boards), `samples.purge` (daily, > 30 days), `push.send`, `species_mask.refresh` (weekly).
 
 **REST, JSON, `/v1`, OpenAPI generated**
 
@@ -124,7 +124,7 @@ GET  /v1/reckonings/latest           {weekId, ranAt, nextAt, factionTotals, myFl
 GET  /v1/tiles/hex/{z}/{x}/{y}.mvt   (feature 008)
 
 POST /v1/captures … /uploaded … /confirm;   GET /v1/captures/{id}
-GET  /v1/species?kingdom=&region=lt;         GET /v1/species/regional-mask?lat&lon&week
+GET  /v1/species?kingdom=&region=<code>;     GET /v1/species/regional-mask?lat&lon&week
 GET  /v1/me/collection;                      GET /v1/me/stats
 GET  /v1/leaderboards?scope=global|faction|hex_r7&period=week|all&weekId=
 POST /v1/devices
@@ -171,8 +171,9 @@ hex_parent_state(h3 bigint pk, res smallint, geom, owner_faction_id, child_owner
 reckonings(week_id text pk, started_at, finished_at, hexes_processed int, flips int, status)
 
 species(id serial pk, kingdom, scientific_name unique, common_name_en, common_name_lt, family, gbif_key unique,
-      birdnet_label unique, plantnet_id, region_lt bool, rarity_tier smallint, image_url, image_license,
+      birdnet_label unique, plantnet_id, rarity_tier smallint, image_url, image_license,
       image_attribution, is_active)
+species_region(species_id fk, region_code text, pk(species_id, region_code))   -- per-region flag; 'lt' is the first seeded region
 species_season(species_id fk, week smallint, present bool)
 
 captures(id uuid pk, user_id fk, client_capture_id uuid, walk_id fk null, kind, faction_id, h3_r9, week_id, lat, lon,
@@ -183,7 +184,7 @@ capture_candidates(capture_id fk cascade, source 'device|cloud', rank, species_i
 user_species(user_id fk cascade, species_id fk, first_capture_id, first_seen_at, capture_count, pk(user_id, species_id))
 
 points_ledger(id bigserial pk, user_id, faction_id, kind ledger_kind, points, ref_type, ref_id, h3_r9, week_id, created_at)
-streaks(user_id pk, current_days, longest_days, last_active_date, tz default 'Europe/Vilnius')
+streaks(user_id pk, current_days, longest_days, last_active_date, tz default 'UTC')   -- player's local zone, set from the device; streaks are the only local-time rule
 leaderboard_snapshots(week_id, scope, scope_id, rank, user_id, meters real, points int, computed_at, pk(week_id, scope, scope_id, rank))
 faction_stats_weekly(week_id, faction_id, hexes_owned_r9, hexes_owned_r7, meters, active_users, captures, pk(week_id, faction_id))
 anti_cheat_flags(id bigserial pk, user_id, walk_id, capture_id, code, details jsonb, created_at, resolved_at, resolution)
@@ -195,8 +196,8 @@ Indexes: btree on every `h3_*` column and on `(user_id, created_at desc)` style 
 
 ### Birds
 - Primary model: BirdNET+ V3.0-preview3.1 Global 10K-pruned FP16 ONNX (Apache 2.0 as bundled in Cornell's BirdNET Live app) plus Geomodel 3.0.4 FP16 ONNX (Apache 2.0). `ml/models/manifest.json` records sample rate (32 kHz), window, labels, sha256 and licence.
-- Fallbacks behind the same `BirdClassifier` protocol: BirdNET V2.4 TFLite under a Cornell commercial licence; Google Perch v2 (Apache 2.0) with the classifier head sliced to ~300 Baltic species.
-- Regional filter: Geomodel presence for (lat, lon, week), dropping species below 0.03; the server enforces `species.region_lt` (~250 species from Geomodel over a Lithuania grid plus the eBird checklist).
+- Fallbacks behind the same `BirdClassifier` protocol: BirdNET V2.4 TFLite (CC BY-NC-SA) may be used on device and server **only while the app is non-commercial** (prototype phase, ADR 0006 addendum) and must be removed or licensed from Cornell before any monetisation — V3 stays primary so nothing needs swapping; Google Perch v2 (Apache 2.0) with the classifier head sliced to the regions seeded in `species_region`.
+- Regional filter: Geomodel presence for the player's actual (lat, lon, week) — global, no country boundary — dropping species below 0.03; the server applies the same Geomodel mask plus `species_region(species_id, region_code)`, a per-region flag table. `lt` is the first seeded region (~250 species from Geomodel over a Lithuania grid plus the eBird checklist); further regions are seeded as players appear.
 - Verification thresholds (calibrated in feature 006): verified if server top-1 ≥ 0.50 and equals device top-1, or ≥ 0.70 within device top-3; needs user confirmation at 0.30–0.50 (reduced bonus); otherwise rejected. Offline captures stay queued and are shown as unconfirmed.
 - The V3 preview is documented as subject to change: pin versions, re-check terms per release, show "Powered by BirdNET" attribution.
 
@@ -206,8 +207,9 @@ Indexes: btree on every `h3_*` column and on `(user_id, created_at desc)` style 
 
 ## 8. Cross-cutting concerns
 
-- **GDPR**: walk paths are precise location data and stay private to the player; DPIA recommended; 30-day raw retention; EU hosting including PostHog EU; export and deletion endpoints; analytics no finer than res-7; age gate 13+ (consider 16 for Lithuania).
+- **Play area**: worldwide. Nothing in the rules, map or species pipeline is bounded to Lithuania; Kaunas is only where the beta is tested.
+- **GDPR**: walk paths are precise location data and stay private to the player (only the player ever sees their own paths; other players and the map see aggregated metres per faction); DPIA recommended; 30-day raw retention; EU hosting including PostHog EU; export and deletion endpoints; analytics no finer than res-7; age gate 13+ (consider 16 for Lithuania).
 - **App Store review**: background location and audio are user-initiated (visible walk session, blue indicator); reviewer notes and demo video; account deletion; privacy manifest.
 - **Battery**: GPS plus audio inference is the worst case; listening cap, Core ML execution provider, GPS throttling; measured with `xctrace` Energy Log on three devices.
 - **Cheating**: spoofers, phone-swing and bots are detected cheaply and excluded from the reckoning while flagged; perfect prevention is not a goal.
-- **Weekly cadence**: nothing flips mid-week; the contested indicator, live weekly leaderboards, per-walk "your share" feedback and the Monday results push keep the loop alive.
+- **Weekly cadence**: one global cutoff — weeks are ISO weeks in UTC and the reckoning runs Monday 00:00 UTC for everyone; nothing flips mid-week; the contested indicator, live weekly leaderboards, per-walk "your share" feedback and the Monday results push (sent in the player's local morning) keep the loop alive.

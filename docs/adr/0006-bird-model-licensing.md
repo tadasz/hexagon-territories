@@ -11,4 +11,8 @@ Ship BirdNET+ V3 (Global 10K-pruned FP16 ONNX) plus Geomodel 3.0.4 on device thr
 ## Consequences
 - No non-commercial weights in release builds (Constitution III).
 - The V3 preview may change labels or format; species are keyed by scientific name and every model update goes through the eval set.
-- A licence inquiry to Cornell is sent in feature 001 as insurance.
+- A licence inquiry to Cornell is drafted in feature 001; sending it is optional until monetisation (see addendum).
+
+## Addendum (2026-09-07): prototype phase is non-commercial
+
+The product owner decided that the app is non-commercial during the prototype phase. Under CC BY-NC-SA 4.0, BirdNET V2.4 **may** therefore be used during that phase, on device and server, as a fallback behind the `BirdClassifier` protocol (manifest role `prototype-fallback`, non-commercial phase only). BirdNET+ V3 (Apache 2.0) remains the primary model, so nothing has to be swapped when monetisation starts; V2.4 must be removed from every build and the worker, or licensed from Cornell, before any paid feature ships. The Cornell inquiry stays in the `docs/licences.md` log marked "optional until monetisation".
