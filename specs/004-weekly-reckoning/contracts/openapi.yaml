@@ -1,0 +1,747 @@
+openapi: 3.1.0
+info:
+  title: Nature Explorer API
+  version: 0.4.0
+  description: |
+    Fragment for feature 004-weekly-reckoning: the hex read model (`GET /v1/hexes`,
+    `GET /v1/hexes/{h3}`), the latest reckoning (`GET /v1/reckonings/latest`) and the admin
+    trigger/status (`POST/GET /v1/admin/reckonings/{weekId}`). The running API serves the merged
+    document at GET /openapi.json (generated from TypeBox schemas by @fastify/swagger);
+    packages/api-schema/openapi.json is the committed snapshot and the source the iOS client
+    (feature 005) is generated from. The `Error` envelope and the `bearerAuth` scheme come from
+    features 001/002 and are repeated so this fragment stands alone.
+
+    Ownership changes only inside the `reckoning.weekly` job (docs/territory-rules.md "Weekly
+    reckoning"). Every endpoint here reads; the admin endpoint triggers the job.
+servers:
+  - url: http://localhost:3000
+    description: Local development (make dev)
+tags:
+  - name: territory
+    description: Hex ownership, weekly pressure and reckoning results
+  - name: admin
+    description: Operator endpoints (role admin)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/hexes:
+    get:
+      tags: [territory]
+      operationId: listHexes
+      summary: Hexagons of one resolution inside a bounding box
+      description: |
+        Returns every hexagon of resolution `res` (5–9) that has a state row and whose polygon
+        intersects `bbox`, sorted by cell id. Res 9 rows carry the owner from the last reckoning
+        and this week's pressure read model (`pressureLeader`, `contested`); res 5–8 rows come
+        from the materialised parent state and carry `pressureLeader: null`, `contested: false`,
+        `ownerSince: null`. Cells that have never been walked are absent. The box may not cross
+        the antimeridian and may not be estimated to contain more than 3 000 hexagons of the
+        requested resolution (400 BBOX_TOO_LARGE). Rate limited: 120 requests per minute per
+        player. Sent with `Cache-Control: private, max-age=30`.
+      parameters:
+        - name: res
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 5
+            maximum: 9
+        - name: bbox
+          in: query
+          required: true
+          description: "`minLon,minLat,maxLon,maxLat` in WGS84 degrees; min < max on both axes"
+          schema:
+            type: string
+            pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$"
+            examples:
+              - "23.85,54.87,23.98,54.93"
+      responses:
+        "200":
+          description: Hexagons in the box
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HexList"
+              example:
+                weekId: 2026-W37
+                res: 9
+                items:
+                  - h3: 891f40d1a4fffff
+                    res: 9
+                    owner: 1
+                    ownerSince: 2026-W35
+                    pressureLeader: 2
+                    contested: true
+                  - h3: 891f40d1a57ffff
+                    res: 9
+                    owner: null
+                    ownerSince: null
+                    pressureLeader: null
+                    contested: false
+        "400":
+          description: Validation failed (VALIDATION_FAILED; `details.field` is `res` or `bbox`) or the box is too large (BBOX_TOO_LARGE; `details.res`, `details.maxCells`, `details.estimatedCells`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/hexes/{h3}:
+    get:
+      tags: [territory]
+      operationId: getHex
+      summary: Detail of one resolution-9 hexagon
+      description: |
+        Owner and since when, captain, strength per faction, this week's counted metres and
+        bonuses per faction with the pressure leader and contested flag, the caller's own metres
+        and states (`explored`, `flipped`, `held`), the last eight reckonings (newest first) and
+        `captures` (always empty until feature 006). Any valid resolution-9 cell answers 200 —
+        a never-walked cell has no owner, no strengths and no history.
+      parameters:
+        - name: h3
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{15}$"
+      responses:
+        "200":
+          description: Hex detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HexDetail"
+              example:
+                h3: 891f40d1a4fffff
+                owner: 1
+                ownerSince: 2026-W35
+                captain: { userId: 2f9b7c1e-1b2c-4d3e-9f0a-1a2b3c4d5e6f, displayName: Explorer 0421 }
+                strengths: [{ factionId: 1, strength: 1150 }, { factionId: 2, strength: 150 }]
+                week:
+                  weekId: 2026-W37
+                  factions:
+                    - { factionId: 1, cappedMeters: 100, bonusMeters: 0, score: 675 }
+                    - { factionId: 2, cappedMeters: 700, bonusMeters: 0, score: 775 }
+                  pressureLeader: 2
+                  contested: true
+                me: { meters: 812.3, cappedMeters: 812.3, explored: true, flipped: true, held: false }
+                reckonings:
+                  - weekId: 2026-W36
+                    owner: 1
+                    flipped: false
+                    from: null
+                    to: null
+                    strengths: [{ factionId: 1, strength: 1150 }, { factionId: 2, strength: 150 }]
+                    captain: { userId: 2f9b7c1e-1b2c-4d3e-9f0a-1a2b3c4d5e6f, displayName: Explorer 0421 }
+                captures: []
+        "400":
+          description: Not a resolution-9 cell (VALIDATION_FAILED, `details.field = h3`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/reckonings/latest:
+    get:
+      tags: [territory]
+      operationId: getLatestReckoning
+      summary: The last completed reckoning and the caller's part in it
+      description: |
+        Week id and run time of the last completed reckoning, when the next one is due (next
+        Monday 00:00 UTC), whether one is in progress, per-faction totals of that week and the
+        caller's flip count with the flipped cell ids. Before the first reckoning the week
+        fields are null and the totals empty. Sent with `Cache-Control: private, max-age=60`.
+      responses:
+        "200":
+          description: Latest reckoning
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReckoningLatest"
+              example:
+                weekId: 2026-W36
+                ranAt: "2026-09-07T00:00:41.000Z"
+                nextAt: "2026-09-14T00:00:00.000Z"
+                inProgress: null
+                factionTotals:
+                  - { factionId: 1, hexesOwnedR9: 412, hexesOwnedR7: 5, meters: 184320, activeUsers: 37, captures: 0, flipsGained: 12, flipsLost: 4 }
+                  - { factionId: 2, hexesOwnedR9: 388, hexesOwnedR7: 4, meters: 171004, activeUsers: 31, captures: 0, flipsGained: 6, flipsLost: 9 }
+                  - { factionId: 3, hexesOwnedR9: 301, hexesOwnedR7: 3, meters: 120988, activeUsers: 22, captures: 0, flipsGained: 3, flipsLost: 8 }
+                myFlips: 2
+                myFlippedHexes: [891f40d1a4fffff, 891f40d1a57ffff]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/admin/reckonings/{weekId}:
+    post:
+      tags: [admin]
+      operationId: runReckoning
+      summary: Run (or preview) the reckoning of one week
+      description: |
+        Role `admin` only. Runs the same code as the scheduled job. `sync: true` runs in the
+        request and answers the result (200); otherwise the job is enqueued (202). `dryRun`
+        (requires `sync`) writes nothing — no state, events, snapshots, XP, pushes, no
+        reckoning row — skips the auto-finish of stale walks, and returns the flips it would
+        have made (≤ 1 000 entries). The week must have ended (400 WEEK_NOT_ENDED) and be the
+        next in sequence after the last completed reckoning (409 RECKONING_OUT_OF_ORDER,
+        `details.expectedWeekId`); a week already done answers its stored result with 200; a
+        reckoning already running answers 409 RECKONING_RUNNING. Synchronous runs are meant for
+        development and test datasets; production sizes should be enqueued.
+      parameters:
+        - $ref: "#/components/parameters/WeekId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReckoningRunRequest"
+      responses:
+        "200":
+          description: Ran synchronously (or was already done)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReckoningRunResult"
+              example:
+                weekId: 2026-W36
+                dryRun: true
+                status: done
+                resumed: false
+                hexesProcessed: 128
+                flips: 7
+                parentFlips: 2
+                walksAutofinished: 0
+                staleWalksSkipped: 1
+                pushQueued: 0
+                leaderboardRows: 0
+                durationMs: 843
+                startedAt: "2026-09-07T10:12:00.000Z"
+                finishedAt: "2026-09-07T10:12:00.843Z"
+                flipsPreview:
+                  - { h3: 891f40d1a4fffff, from: 1, to: 2 }
+                  - { h3: 891f40d1a57ffff, from: null, to: 3 }
+        "202":
+          description: Enqueued for the job worker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReckoningQueued"
+        "400":
+          description: Validation failed (VALIDATION_FAILED; `details.field` is `weekId` or `dryRun`) or the week has not ended (WEEK_NOT_ENDED, `details.endsAt`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Out of sequence (RECKONING_OUT_OF_ORDER, `details.expectedWeekId`) or already running (RECKONING_RUNNING)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Async run requested while jobs are disabled (JOBS_DISABLED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [admin]
+      operationId: getReckoning
+      summary: Status of one week's reckoning
+      description: Role `admin` only. The stored run state, including the resume stage and cursor progress.
+      parameters:
+        - $ref: "#/components/parameters/WeekId"
+      responses:
+        "200":
+          description: Reckoning status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReckoningStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No reckoning for this week (RECKONING_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /v1/auth/apple or /v1/auth/refresh (feature 002)
+
+  parameters:
+    WeekId:
+      name: weekId
+      in: path
+      required: true
+      description: ISO week in UTC
+      schema:
+        type: string
+        pattern: "^[0-9]{4}-W[0-9]{2}$"
+
+  schemas:
+    HexListItem:
+      type: object
+      required: [h3, res, owner, ownerSince, pressureLeader, contested]
+      additionalProperties: false
+      properties:
+        h3:
+          type: string
+          pattern: "^[0-9a-f]{15}$"
+        res:
+          type: integer
+          minimum: 5
+          maximum: 9
+        owner:
+          type: [integer, "null"]
+          description: Faction owning the hexagon after the last reckoning
+        ownerSince:
+          type: [string, "null"]
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+          description: Week the current owner took the cell; null when unclaimed or for res 5–8
+        pressureLeader:
+          type: [integer, "null"]
+          description: Faction leading strength × 0.5 + this week's capped metres + bonuses (ties → lowest id); null when nobody has anything or for res 5–8
+        contested:
+          type: boolean
+          description: pressureLeader exists and differs from owner (always false for res 5–8)
+
+    HexList:
+      type: object
+      required: [weekId, res, items]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+          description: The current week the pressure was computed for
+        res:
+          type: integer
+        items:
+          type: array
+          maxItems: 3000
+          items:
+            $ref: "#/components/schemas/HexListItem"
+          description: Sorted by h3 ascending
+
+    FactionStrength:
+      type: object
+      required: [factionId, strength]
+      additionalProperties: false
+      properties:
+        factionId:
+          type: integer
+        strength:
+          type: number
+          minimum: 0
+
+    HexWeekFaction:
+      type: object
+      required: [factionId, cappedMeters, bonusMeters, score]
+      additionalProperties: false
+      properties:
+        factionId:
+          type: integer
+        cappedMeters:
+          type: number
+          minimum: 0
+        bonusMeters:
+          type: number
+          minimum: 0
+        score:
+          type: number
+          minimum: 0
+          description: strength × 0.5 + cappedMeters + bonusMeters
+
+    HexWeek:
+      type: object
+      required: [weekId, factions, pressureLeader, contested]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        factions:
+          type: array
+          items:
+            $ref: "#/components/schemas/HexWeekFaction"
+          description: Sorted by factionId; factions with nothing this week and no strength are omitted
+        pressureLeader:
+          type: [integer, "null"]
+        contested:
+          type: boolean
+
+    HexCaptain:
+      type: object
+      required: [userId, displayName]
+      additionalProperties: false
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+
+    HexMe:
+      type: object
+      required: [meters, cappedMeters, explored, flipped, held]
+      additionalProperties: false
+      properties:
+        meters:
+          type: number
+          minimum: 0
+          description: The caller's raw metres in the cell this week
+        cappedMeters:
+          type: number
+          minimum: 0
+        explored:
+          type: boolean
+          description: The caller has metres in the cell in any week
+        flipped:
+          type: boolean
+          description: The caller's metres were part of a reckoning that flipped the cell to their faction
+        held:
+          type: boolean
+          description: The caller is the current captain
+
+    HexReckoningEntry:
+      type: object
+      required: [weekId, owner, flipped, from, to, strengths, captain]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        owner:
+          type: [integer, "null"]
+        flipped:
+          type: boolean
+        from:
+          type: [integer, "null"]
+        to:
+          type: [integer, "null"]
+        strengths:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactionStrength"
+        captain:
+          oneOf:
+            - $ref: "#/components/schemas/HexCaptain"
+            - type: "null"
+
+    HexDetail:
+      type: object
+      required: [h3, owner, ownerSince, captain, strengths, week, me, reckonings, captures]
+      additionalProperties: false
+      properties:
+        h3:
+          type: string
+          pattern: "^[0-9a-f]{15}$"
+        owner:
+          type: [integer, "null"]
+        ownerSince:
+          type: [string, "null"]
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        captain:
+          oneOf:
+            - $ref: "#/components/schemas/HexCaptain"
+            - type: "null"
+        strengths:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactionStrength"
+          description: Sorted by factionId
+        week:
+          $ref: "#/components/schemas/HexWeek"
+        me:
+          $ref: "#/components/schemas/HexMe"
+        reckonings:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/HexReckoningEntry"
+          description: Newest first
+        captures:
+          type: array
+          items: {}
+          description: Always empty in feature 004; feature 006 defines the item schema
+
+    FactionTotal:
+      type: object
+      required: [factionId, hexesOwnedR9, hexesOwnedR7, meters, activeUsers, captures, flipsGained, flipsLost]
+      additionalProperties: false
+      properties:
+        factionId:
+          type: integer
+        hexesOwnedR9:
+          type: integer
+          minimum: 0
+        hexesOwnedR7:
+          type: integer
+          minimum: 0
+        meters:
+          type: number
+          minimum: 0
+          description: Capped walking metres the faction earned in the week
+        activeUsers:
+          type: integer
+          minimum: 0
+        captures:
+          type: integer
+          minimum: 0
+        flipsGained:
+          type: integer
+          minimum: 0
+        flipsLost:
+          type: integer
+          minimum: 0
+
+    ReckoningLatest:
+      type: object
+      required: [weekId, ranAt, nextAt, inProgress, factionTotals, myFlips, myFlippedHexes]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: [string, "null"]
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        ranAt:
+          type: [string, "null"]
+          format: date-time
+        nextAt:
+          type: string
+          format: date-time
+          description: Next Monday 00:00 UTC after now
+        inProgress:
+          type: [string, "null"]
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+          description: Week id of a reckoning currently running, if any
+        factionTotals:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactionTotal"
+          description: Sorted by factionId; empty before the first reckoning
+        myFlips:
+          type: integer
+          minimum: 0
+          description: Cells the caller helped flip to their faction in that week
+        myFlippedHexes:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            pattern: "^[0-9a-f]{15}$"
+          description: Sorted by h3
+
+    ReckoningRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        dryRun:
+          type: boolean
+          default: false
+          description: Compute and report the flips without writing anything; requires sync
+        sync:
+          type: boolean
+          default: false
+          description: Run inside the request and answer the result instead of enqueuing the job
+
+    FlipPreview:
+      type: object
+      required: [h3, from, to]
+      additionalProperties: false
+      properties:
+        h3:
+          type: string
+          pattern: "^[0-9a-f]{15}$"
+        from:
+          type: [integer, "null"]
+        to:
+          type: [integer, "null"]
+
+    ReckoningRunResult:
+      type: object
+      required: [weekId, dryRun, status, resumed, hexesProcessed, flips, parentFlips, walksAutofinished, staleWalksSkipped, pushQueued, leaderboardRows, durationMs, startedAt, finishedAt, flipsPreview]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        dryRun:
+          type: boolean
+        status:
+          type: string
+          enum: [done]
+        resumed:
+          type: boolean
+          description: The run continued an earlier interrupted run of the same week
+        hexesProcessed:
+          type: integer
+          minimum: 0
+        flips:
+          type: integer
+          minimum: 0
+        parentFlips:
+          type: integer
+          minimum: 0
+        walksAutofinished:
+          type: integer
+          minimum: 0
+        staleWalksSkipped:
+          type: integer
+          minimum: 0
+          description: Dry run only — stale walks a real run would have finished first
+        pushQueued:
+          type: integer
+          minimum: 0
+        leaderboardRows:
+          type: integer
+          minimum: 0
+        durationMs:
+          type: integer
+          minimum: 0
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        flipsPreview:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/FlipPreview"
+          description: Dry run only; empty for a real run
+
+    ReckoningQueued:
+      type: object
+      required: [weekId, status, jobId]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        status:
+          type: string
+          enum: [queued]
+        jobId:
+          type: string
+
+    ReckoningStatus:
+      type: object
+      required: [weekId, status, stage, attempt, startedAt, finishedAt, hexesProcessed, flips, parentFlips, batches, walksAutofinished, pushQueued, error]
+      additionalProperties: false
+      properties:
+        weekId:
+          type: string
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        status:
+          type: string
+          enum: [running, done, failed]
+        stage:
+          type: string
+          enum: [walks, cells, rollup, push, done]
+        attempt:
+          type: integer
+          minimum: 1
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+        hexesProcessed:
+          type: integer
+        flips:
+          type: integer
+        parentFlips:
+          type: integer
+        batches:
+          type: integer
+        walksAutofinished:
+          type: integer
+        pushQueued:
+          type: integer
+        error:
+          type: [string, "null"]
+
+    Error:
+      type: object
+      description: |
+        Shared error envelope returned by every non-2xx response (feature 001). `code` is a stable
+        machine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers; `details`
+        carries structured context.
+      required: [error, requestId]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]+$"
+              examples:
+                - VALIDATION_FAILED
+                - UNAUTHORIZED
+                - TOKEN_EXPIRED
+                - ACCOUNT_DELETED
+                - FORBIDDEN
+                - RATE_LIMITED
+                - BBOX_TOO_LARGE
+                - WEEK_NOT_ENDED
+                - RECKONING_OUT_OF_ORDER
+                - RECKONING_RUNNING
+                - RECKONING_NOT_FOUND
+                - JOBS_DISABLED
+                - DB_UNAVAILABLE
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        requestId:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The caller is not an admin (FORBIDDEN)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set
+      headers:
+        retry-after:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
