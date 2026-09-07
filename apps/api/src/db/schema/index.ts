@@ -3,6 +3,7 @@
 export * from './enums.js';
 export * from './factions.js';
 export * from './users.js';
+export * from './exports.js';
 export * from './walks.js';
 export * from './hexes.js';
 export * from './species.js';

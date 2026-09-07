@@ -29,6 +29,8 @@ const EXPECTED_TABLES = [
   'leaderboard_snapshots',
   'faction_stats_weekly',
   'anti_cheat_flags',
+  // feature 002
+  'account_exports',
 ];
 
 const EXPECTED_ENUMS = [
@@ -39,6 +41,8 @@ const EXPECTED_ENUMS = [
   'walk_status',
   'candidate_source',
   'reckoning_status',
+  // feature 002
+  'export_status',
 ];
 
 // Kaunas town hall area, res 9 and its parents (H3 indexes as bigint).
@@ -74,11 +78,56 @@ describeWithDb('schema migration (data-model.md §4)', () => {
     for (const table of EXPECTED_TABLES) expect(names, `missing table ${table}`).toContain(table);
   });
 
-  it('creates the seven enums', async () => {
+  it('creates the seven 001 enums plus export_status', async () => {
     const { rows } = await tdb.pool.query<{ typname: string }>(
       `select typname from pg_type where typtype = 'e' order by typname`,
     );
     expect(rows.map((row) => row.typname)).toEqual(expect.arrayContaining(EXPECTED_ENUMS));
+    const values = await tdb.pool.query<{ enumlabel: string }>(
+      `select e.enumlabel from pg_enum e join pg_type t on t.oid = e.enumtypid
+       where t.typname = 'export_status' order by e.enumsortorder`,
+    );
+    expect(values.rows.map((row) => row.enumlabel)).toEqual(['pending', 'ready', 'failed']);
+  });
+
+  it('migration 0003 adds account_exports and the two partial/plain indexes', async () => {
+    const columns = await tdb.pool.query<{ column_name: string; data_type: string }>(
+      `select column_name, data_type from information_schema.columns
+       where table_name = 'account_exports' order by ordinal_position`,
+    );
+    expect(columns.rows.map((row) => row.column_name)).toEqual([
+      'id',
+      'user_id',
+      'status',
+      'object_key',
+      'requested_at',
+      'completed_at',
+      'expires_at',
+      'error',
+    ]);
+    const fk = await tdb.pool.query<{ delete_rule: string }>(
+      `select rc.delete_rule from information_schema.referential_constraints rc
+       join information_schema.table_constraints tc on tc.constraint_name = rc.constraint_name
+       where tc.table_name = 'account_exports'`,
+    );
+    expect(fk.rows).toEqual([{ delete_rule: 'CASCADE' }]);
+
+    const indexes = await tdb.pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes
+       where indexname in ('account_exports_user_requested_idx', 'users_faction_active_idx', 'refresh_tokens_expires_idx')
+       order by indexname`,
+    );
+    const byName = Object.fromEntries(indexes.rows.map((row) => [row.indexname, row.indexdef]));
+    expect(Object.keys(byName)).toEqual([
+      'account_exports_user_requested_idx',
+      'refresh_tokens_expires_idx',
+      'users_faction_active_idx',
+    ]);
+    expect(byName.users_faction_active_idx).toMatch(
+      /\(faction_id, last_seen_at\) WHERE \(deleted_at IS NULL\)/,
+    );
+    expect(byName.refresh_tokens_expires_idx).toMatch(/\(expires_at\)/);
+    console.info('feature 002 schema: account_exports + users_faction_active_idx present');
   });
 
   it('partitions location_samples by range on ts with a default and monthly partitions', async () => {

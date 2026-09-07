@@ -25,6 +25,8 @@ function errorBody(
 interface Mapped {
   status: number;
   body: ErrorBody;
+  /** Extra response headers (e.g. `retry-after` for 429). */
+  headers?: Record<string, string>;
 }
 
 export function mapError(
@@ -33,10 +35,17 @@ export function mapError(
   exposeInternalErrors: boolean,
 ): Mapped {
   if (error instanceof AppError) {
-    return {
+    const mapped: Mapped = {
       status: error.statusCode,
       body: errorBody(error.code, error.message, requestId, error.details),
     };
+    // 429 RATE_LIMITED carries `details.retryAfterS`; mirror it as the standard header so the
+    // client can honour it even when the limiter did not set the header itself.
+    const retryAfterS = error.details?.retryAfterS;
+    if (error.statusCode === 429 && typeof retryAfterS === 'number' && retryAfterS >= 0) {
+      mapped.headers = { 'retry-after': String(Math.ceil(retryAfterS)) };
+    }
+    return mapped;
   }
 
   const fastifyError = error as FastifyError;
@@ -78,7 +87,9 @@ export function mapError(
 
 /**
  * Normalises every error and unknown route to the shared `Error` envelope
- * (`{ error: { code, message, details? }, requestId }`) of contracts/openapi.yaml.
+ * (`{ error: { code, message, details? }, requestId }`) of contracts/openapi.yaml. `AppError`s
+ * keep their status and code (401/403/409/429 of feature 002 included); headers already set on
+ * the reply (for example `retry-after` from the rate limiter) are preserved.
  */
 export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
   (fastify, opts, done) => {
@@ -92,11 +103,16 @@ export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
     });
 
     fastify.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
-      const { status, body } = mapError(error, request.id, opts.exposeInternalErrors);
+      const { status, body, headers } = mapError(error, request.id, opts.exposeInternalErrors);
       if (status >= 500) {
         request.log.error({ err: error, requestId: request.id }, body.error.message);
       } else {
         request.log.info({ err: error, requestId: request.id }, body.error.message);
+      }
+      if (headers) {
+        for (const [name, value] of Object.entries(headers)) {
+          if (!reply.hasHeader(name)) void reply.header(name, value);
+        }
       }
       // Serialise by hand so a route's own response schema never rewrites the envelope.
       void reply.code(status).type('application/json; charset=utf-8').send(JSON.stringify(body));

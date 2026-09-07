@@ -34,6 +34,10 @@ export const users = pgTable(
     index('users_deleted_at_idx')
       .on(t.deletedAt)
       .where(sql`deleted_at is not null`),
+    // Member and active-member counts of GET /v1/factions (002 research R5).
+    index('users_faction_active_idx')
+      .on(t.factionId, t.lastSeenAt)
+      .where(sql`deleted_at is null`),
   ],
 );
 
@@ -66,5 +70,9 @@ export const refreshTokens = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
   },
-  (t) => [index('refresh_tokens_user_id_idx').on(t.userId)],
+  (t) => [
+    index('refresh_tokens_user_id_idx').on(t.userId),
+    // Opportunistic cleanup of expired rows on refresh (002 research R2).
+    index('refresh_tokens_expires_idx').on(t.expiresAt),
+  ],
 );

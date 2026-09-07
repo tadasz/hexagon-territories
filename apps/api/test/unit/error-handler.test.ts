@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { App } from '../../src/app.js';
-import { AppError } from '../../src/errors.js';
+import { LOG_REDACT_CENSOR, type App } from '../../src/app.js';
+import { AppError, ERROR_CODES } from '../../src/errors.js';
 import { mapError } from '../../src/plugins/error-handler.js';
 import { buildUnitApp, testConfig } from '../helpers/app.js';
 
@@ -79,6 +79,81 @@ describe('error handler', () => {
     expect(res.statusCode).toBe(418);
     expect(res.json()).toMatchObject({
       error: { code: 'TEAPOT', message: 'short and stout', details: { handle: true } },
+    });
+  });
+});
+
+describe('error handler (feature 002 codes)', () => {
+  let app: App | undefined;
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it('keeps the 401 / 409 codes and details of AppErrors', async () => {
+    app = await buildUnitApp();
+    app.get('/unauthorized', () => {
+      throw new AppError(401, ERROR_CODES.TOKEN_EXPIRED, 'expired');
+    });
+    app.get('/locked', () => {
+      throw new AppError(409, ERROR_CODES.FACTION_CHANGE_LOCKED, 'locked', {
+        nextChangeAt: '2026-10-07T10:00:00.000Z',
+      });
+    });
+    const unauthorized = await app.inject({ url: '/unauthorized' });
+    expect(unauthorized.statusCode).toBe(401);
+    expect(unauthorized.json()).toMatchObject({ error: { code: 'TOKEN_EXPIRED' } });
+
+    const locked = await app.inject({ url: '/locked' });
+    expect(locked.statusCode).toBe(409);
+    expect(locked.json()).toMatchObject({
+      error: {
+        code: 'FACTION_CHANGE_LOCKED',
+        details: { nextChangeAt: '2026-10-07T10:00:00.000Z' },
+      },
+    });
+  });
+
+  it('mirrors details.retryAfterS of a 429 into the retry-after header', async () => {
+    app = await buildUnitApp();
+    app.get('/limited', () => {
+      throw new AppError(429, ERROR_CODES.RATE_LIMITED, 'slow down', { retryAfterS: 17 });
+    });
+    const res = await app.inject({ url: '/limited' });
+    expect(res.statusCode).toBe(429);
+    expect(res.headers['retry-after']).toBe('17');
+    expect(res.json()).toMatchObject({
+      error: { code: 'RATE_LIMITED', details: { retryAfterS: 17 } },
+    });
+  });
+
+  it('redacts e-mail addresses and credentials from log lines (FR-015)', async () => {
+    const lines: string[] = [];
+    app = await buildUnitApp({
+      logger: { level: 'info', stream: { write: (line: string) => void lines.push(line) } },
+    });
+    app.get('/log', (request) => {
+      request.log.info(
+        { email: 'a@b.c', identityToken: 'x', nested: { refreshToken: 'r', accessToken: 'a' } },
+        'sensitive object',
+      );
+      return { ok: true };
+    });
+    await app.inject({
+      url: '/log',
+      headers: { authorization: 'Bearer top-secret-access-token' },
+    });
+    const joined = lines.join('\n');
+    expect(joined).toContain('sensitive object');
+    expect(joined).not.toContain('a@b.c');
+    expect(joined).not.toContain('top-secret-access-token');
+    expect(joined).toContain(LOG_REDACT_CENSOR);
+    const entry = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((line) => line.msg === 'sensitive object');
+    expect(entry).toMatchObject({
+      email: LOG_REDACT_CENSOR,
+      identityToken: LOG_REDACT_CENSOR,
+      nested: { refreshToken: LOG_REDACT_CENSOR, accessToken: LOG_REDACT_CENSOR },
     });
   });
 });

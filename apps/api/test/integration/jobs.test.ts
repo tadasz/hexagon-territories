@@ -32,10 +32,29 @@ describeWithDb('pg-boss on the shared pool', () => {
     expect(rows).toEqual([{ name: 'reckoning.weekly', cron: '0 0 * * 1', timezone: 'UTC' }]);
   });
 
-  it('created the queue', async () => {
+  it('created the three queues of feature 002', async () => {
     const { rows } = await tdb.pool.query<{ name: string }>(
-      `select name from pgboss.queue where name = 'reckoning.weekly'`,
+      `select name from pgboss.queue where name in ('reckoning.weekly', 'account.purge', 'account.export') order by name`,
     );
-    expect(rows).toEqual([{ name: 'reckoning.weekly' }]);
+    expect(rows).toEqual([
+      { name: 'account.export' },
+      { name: 'account.purge' },
+      { name: 'reckoning.weekly' },
+    ]);
+  });
+
+  it('accepts a delayed singleton account.purge job', async () => {
+    const startAfter = new Date(Date.now() + 30 * 86_400_000);
+    const jobId = await app.boss!.send(
+      'account.purge',
+      { userId: 'test', deletedAt: new Date().toISOString() },
+      { startAfter, singletonKey: 'test', retryLimit: 5, retryBackoff: true },
+    );
+    expect(jobId).toMatch(/^[0-9a-f-]{36}$/);
+    const { rows } = await tdb.pool.query<{ state: string; singleton_key: string }>(
+      `select state, singleton_key from pgboss.job where id = $1`,
+      [jobId],
+    );
+    expect(rows).toEqual([{ state: 'created', singleton_key: 'test' }]);
   });
 });

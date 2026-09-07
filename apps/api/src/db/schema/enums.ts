@@ -1,6 +1,7 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
 
-// The seven enums of specs/001-repo-foundations/data-model.md §4.1.
+// The seven enums of specs/001-repo-foundations/data-model.md §4.1 plus `export_status`
+// (specs/002-auth-and-factions/data-model.md §1.1).
 
 export const kingdomEnum = pgEnum('kingdom', ['bird', 'plant']);
 
@@ -32,3 +33,6 @@ export const walkStatusEnum = pgEnum('walk_status', ['active', 'finished', 'flag
 export const candidateSourceEnum = pgEnum('candidate_source', ['device', 'cloud']);
 
 export const reckoningStatusEnum = pgEnum('reckoning_status', ['running', 'done', 'failed']);
+
+/** Lifecycle of an `account_exports` row (feature 002). */
+export const exportStatusEnum = pgEnum('export_status', ['pending', 'ready', 'failed']);

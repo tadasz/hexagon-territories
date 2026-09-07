@@ -1,10 +1,12 @@
 import fp from 'fastify-plugin';
 import PgBoss from 'pg-boss';
-import { registerReckoningWeekly, type JobScheduler } from '../jobs/reckoning-weekly.js';
+import type { AppConfig } from '../config.js';
+import { registerJobs, type JobRegistrar } from '../jobs/index.js';
+import { systemClock, type Clock } from '../lib/time.js';
 
-/** The slice of pg-boss the plugin drives; a fake with these members is enough for unit tests. */
-export type JobBoss = JobScheduler &
-  Pick<PgBoss, 'start' | 'stop'> & {
+/** The slice of pg-boss the plugin and the routes drive; a fake with these members is enough for tests. */
+export type JobBoss = JobRegistrar &
+  Pick<PgBoss, 'start' | 'stop' | 'send'> & {
     on(event: 'error', handler: (error: Error) => void): unknown;
   };
 
@@ -17,6 +19,9 @@ export interface JobsPluginOptions {
   schema?: string;
   /** Delay before retrying `boss.start()` after a failure (e.g. database down at boot). */
   retryMs?: number;
+  /** Job dependencies beyond the Fastify decorators (`db`, `storage`, `log`). */
+  clock?: Clock;
+  config: Pick<AppConfig, 'account' | 'jwt'>;
 }
 
 declare module 'fastify' {
@@ -29,9 +34,9 @@ declare module 'fastify' {
 }
 
 /**
- * Boots pg-boss on the shared `pg.Pool` (one connection budget) and registers every job. A
- * database that is down at boot does not crash the API: the start is retried every `retryMs`
- * and `/health` keeps reporting the outage.
+ * Boots pg-boss on the shared `pg.Pool` (one connection budget) and registers every job through
+ * `registerJobs`. A database that is down at boot does not crash the API: the start is retried
+ * every `retryMs` and `/health` keeps reporting the outage.
  */
 export const jobsPlugin = fp<JobsPluginOptions>(
   (fastify, opts, done) => {
@@ -59,7 +64,13 @@ export const jobsPlugin = fp<JobsPluginOptions>(
     const start = async (): Promise<void> => {
       try {
         await boss.start();
-        await registerReckoningWeekly(boss, fastify.log);
+        await registerJobs(boss, {
+          db: fastify.db,
+          storage: fastify.storage,
+          clock: opts.clock ?? systemClock,
+          log: fastify.log,
+          config: opts.config,
+        });
         fastify.jobsStarted = true;
         fastify.log.info('pg-boss started');
       } catch (err) {
@@ -81,5 +92,5 @@ export const jobsPlugin = fp<JobsPluginOptions>(
     });
     done();
   },
-  { name: 'jobs', fastify: '5.x', dependencies: ['db'] },
+  { name: 'jobs', fastify: '5.x', dependencies: ['db', 'storage'] },
 );

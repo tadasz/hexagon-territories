@@ -19,16 +19,24 @@
     "clean": "rm -rf dist coverage .turbo",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "job:reckoning": "tsx src/jobs/run.ts reckoning.weekly"
+    "job:reckoning": "tsx src/jobs/run.ts reckoning.weekly",
+    "openapi:print": "tsx src/openapi/print.ts",
+    "dev:apple-stub": "tsx scripts/apple-stub.ts",
+    "job:purge": "tsx src/jobs/run.ts account.purge",
+    "job:export": "tsx src/jobs/run.ts account.export"
   },
   "dependencies": {
-    "@nature/territory-rules": "workspace:*",
+    "@aws-sdk/client-s3": "^3.1127.0",
+    "@aws-sdk/s3-request-presigner": "^3.1127.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@fastify/swagger": "^9.8.1",
     "@fastify/type-provider-typebox": "^5.2.0",
+    "@nature/territory-rules": "workspace:*",
     "@sinclair/typebox": "^0.34.52",
     "drizzle-orm": "^0.44.7",
     "fastify": "^5.12.3",
     "fastify-plugin": "^5.1.0",
+    "jose": "^6.2.12",
     "pg": "^8.23.0",
     "pg-boss": "^10.4.2",
     "pino": "^9.14.0"
