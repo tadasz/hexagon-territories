@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: Nature Explorer API
+  version: 0.2.0
+  description: |
+    Fragment for feature 002-auth-and-factions: Sign in with Apple, token refresh and logout,
+    the faction list with live statistics and the smallest-faction suggestion, the player's
+    profile, faction selection, account deletion and data export. The running API serves the
+    merged document at GET /openapi.json (generated from TypeBox schemas by @fastify/swagger);
+    packages/api-schema/openapi.json is the committed snapshot of that document and the source
+    the iOS client is generated from. The `Error` envelope and `requestId` convention come from
+    feature 001 and are repeated here so this fragment stands alone.
+servers:
+  - url: http://localhost:3000
+    description: Local development (make dev)
+tags:
+  - name: auth
+    description: Sign in with Apple, token refresh, logout (rate limited per client address)
+  - name: factions
+    description: The three factions with live statistics and the suggested faction
+  - name: me
+    description: The signed-in player's profile, faction, deletion and export
+
+security: []
+
+paths:
+  /v1/auth/apple:
+    post:
+      tags: [auth]
+      operationId: signInWithApple
+      summary: Sign in (or up) with an Apple identity token
+      description: |
+        Verifies `identityToken` against Apple's JWKS (issuer `https://appleid.apple.com`,
+        audience = the app's bundle identifier(s)), then creates or resumes the account keyed by
+        Apple's `sub`. E-mail and `fullName` are stored only when the account is created; later
+        calls ignore them. An account marked deleted within the last 30 days is restored
+        (`restored: true`). Rate limited: 20 requests per minute per client address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthAppleRequest"
+      responses:
+        "200":
+          description: Tokens for the (new or existing) account and the player's profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: The identity token is invalid (code INVALID_APPLE_TOKEN, `details.reason` in expired | audience | issuer | signature | malformed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: Apple's key service is unreachable (code APPLE_UNAVAILABLE); retry later
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshTokens
+      summary: Rotate a refresh token
+      description: |
+        Exchanges a valid refresh token for a new token pair and revokes the presented token.
+        Presenting a token that was already rotated revokes every refresh token of the account
+        (code REFRESH_REUSED). Rate limited: 20 requests per minute per client address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Unknown, expired or revoked token (INVALID_REFRESH_TOKEN), reuse of a rotated token (REFRESH_REUSED), or deleted account (ACCOUNT_DELETED); the client must sign in again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the presented refresh token (sign out this device)
+      description: |
+        Revokes the refresh token if it belongs to the caller. Always succeeds for a valid
+        session, even when the token is already revoked or unknown. Other devices are unaffected.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Signed out
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/factions:
+    get:
+      tags: [factions]
+      operationId: listFactions
+      summary: The three factions with live statistics and the suggested faction
+      description: |
+        No session required. Statistics are computed live: members and active members (used the
+        app within `activeWindowDays`, not deleted, has a faction) from the player table, hexes
+        owned at resolution 9 and 7 from the territory tables (zero until the first reckoning).
+        `suggestedFactionId` is the faction with the fewest active members, ties broken by the
+        lowest id. Sent with `Cache-Control: public, max-age=60`.
+      security: []
+      responses:
+        "200":
+          description: Factions sorted by `sort`, then `id`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactionsResponse"
+              example:
+                factions:
+                  - id: 1
+                    slug: owls
+                    name: Owls
+                    emoji: "🦉"
+                    colorLight: "#4CAF50"
+                    colorDark: "#2E7D32"
+                    sort: 1
+                    stats: { members: 12, activeMembers: 9, hexesOwnedR9: 0, hexesOwnedR7: 0 }
+                  - id: 2
+                    slug: foxes
+                    name: Foxes
+                    emoji: "🦊"
+                    colorLight: "#FFC107"
+                    colorDark: "#FFA000"
+                    sort: 2
+                    stats: { members: 10, activeMembers: 10, hexesOwnedR9: 0, hexesOwnedR7: 0 }
+                  - id: 3
+                    slug: deer
+                    name: Deer
+                    emoji: "🦌"
+                    colorLight: "#2196F3"
+                    colorDark: "#1976D2"
+                    sort: 3
+                    stats: { members: 4, activeMembers: 3, hexesOwnedR9: 0, hexesOwnedR7: 0 }
+                suggestedFactionId: 3
+                activeWindowDays: 14
+        "503":
+          $ref: "#/components/responses/DbUnavailable"
+
+  /v1/me:
+    get:
+      tags: [me]
+      operationId: getMe
+      summary: The signed-in player's profile
+      description: Includes `suggestedFactionId` so the faction pick screen needs no second call. Never returns the e-mail address.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [me]
+      operationId: updateMe
+      summary: Update the display name
+      description: |
+        The display name is trimmed, must be 2–24 Unicode scalars long and contain no control
+        characters. Violations answer 400 VALIDATION_FAILED with `details.field = "displayName"`
+        and `details.rule` in tooShort | tooLong | controlCharacter.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [me]
+      operationId: deleteMe
+      summary: Delete the account (30-day grace period)
+      description: |
+        Marks the account deleted, revokes every refresh token and schedules erasure 30 days
+        later (`account.purge`). Signing in with the same Apple ID before `purgeAt` restores
+        the account. After this call every request with the old credentials answers 401
+        ACCOUNT_DELETED.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Deletion accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me/faction:
+    post:
+      tags: [me]
+      operationId: selectFaction
+      summary: Pick or change the faction
+      description: |
+        The first pick is free and starts no lock. Re-selecting the current faction is a no-op.
+        A change is allowed when the player has never changed or the previous change is at least
+        30 days old; otherwise 409 FACTION_CHANGE_LOCKED with `details.nextChangeAt`. XP and level
+        are never altered.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FactionSelect"
+      responses:
+        "200":
+          description: Updated profile (with `factionChangeAvailableAt` and `suggestedFactionId`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Unknown faction id (code FACTION_NOT_FOUND)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Faction change locked (code FACTION_CHANGE_LOCKED, `details.nextChangeAt` ISO 8601)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: FACTION_CHANGE_LOCKED
+                  message: Faction can be changed once every 30 days
+                  details: { nextChangeAt: "2026-10-07T10:00:00.000Z" }
+                requestId: 6f1c2a4e-0d1e-4f3a-9b1c-1a2b3c4d5e6f
+
+  /v1/me/export:
+    get:
+      tags: [me]
+      operationId: getExport
+      summary: Request or poll the player's data export
+      description: |
+        Returns the latest export when it is pending, or ready and not older than 7 days (with a
+        fresh `downloadUrl` valid for one hour). Otherwise enqueues a new export (`account.export`)
+        and answers 202 with `status: pending`. Clients poll every 5 seconds while pending.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Existing export (pending, ready or failed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportStatus"
+              example:
+                id: 1b6f2d3c-4a5b-4c6d-8e9f-0a1b2c3d4e5f
+                status: ready
+                requestedAt: "2026-09-07T10:00:00.000Z"
+                completedAt: "2026-09-07T10:00:04.000Z"
+                expiresAt: "2026-09-14T10:00:04.000Z"
+                downloadUrl: "http://localhost:9000/nature-media/exports/…?X-Amz-Signature=…"
+                error: null
+        "202":
+          description: A new export was enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /v1/auth/apple or /v1/auth/refresh (HS256, 15 minutes)
+
+  schemas:
+    AuthAppleRequest:
+      type: object
+      required: [identityToken]
+      additionalProperties: false
+      properties:
+        identityToken:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: Apple identity token (JWT) from ASAuthorizationAppleIDCredential.identityToken
+        authorizationCode:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Apple authorization code; accepted and ignored in feature 002 (used by the token-revocation flow of feature 009)
+        fullName:
+          type: object
+          additionalProperties: false
+          description: Present only on the first authorization, when Apple hands the name to the app
+          properties:
+            givenName:
+              type: string
+              maxLength: 100
+            familyName:
+              type: string
+              maxLength: 100
+
+    TokenPair:
+      type: object
+      required: [accessToken, accessExpiresAt, refreshToken, refreshExpiresAt]
+      additionalProperties: false
+      properties:
+        accessToken:
+          type: string
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        refreshExpiresAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      required: [tokens, me, isNewUser, restored]
+      additionalProperties: false
+      properties:
+        tokens:
+          $ref: "#/components/schemas/TokenPair"
+        me:
+          $ref: "#/components/schemas/Me"
+        isNewUser:
+          type: boolean
+        restored:
+          type: boolean
+          description: True when an account marked deleted was reactivated by this sign-in
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      additionalProperties: false
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+          maxLength: 256
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      additionalProperties: false
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+          maxLength: 256
+
+    Me:
+      type: object
+      required: [id, displayName, factionId, factionChangedAt, factionChangeAvailableAt, xp, level, role, createdAt, suggestedFactionId]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        factionId:
+          type: [integer, "null"]
+        factionChangedAt:
+          type: [string, "null"]
+          format: date-time
+        factionChangeAvailableAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the next faction change is allowed; null when a change is allowed now (or no faction is set yet)
+        xp:
+          type: integer
+          minimum: 0
+        level:
+          type: integer
+          minimum: 1
+        role:
+          type: string
+          enum: [player, tester, admin]
+        createdAt:
+          type: string
+          format: date-time
+        suggestedFactionId:
+          type: integer
+          description: Faction with the fewest active members (tie → lowest id)
+
+    MeUpdate:
+      type: object
+      required: [displayName]
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Validated by the service to 2–24 Unicode scalars after trimming, no control characters
+
+    FactionSelect:
+      type: object
+      required: [factionId]
+      additionalProperties: false
+      properties:
+        factionId:
+          type: integer
+          minimum: 1
+          maximum: 32767
+
+    AccountDeletion:
+      type: object
+      required: [deletedAt, purgeAt]
+      additionalProperties: false
+      properties:
+        deletedAt:
+          type: string
+          format: date-time
+        purgeAt:
+          type: string
+          format: date-time
+
+    ExportStatus:
+      type: object
+      required: [id, status, requestedAt, completedAt, expiresAt, downloadUrl, error]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, ready, failed]
+        requestedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        downloadUrl:
+          type: [string, "null"]
+          description: Presigned GET URL, valid for one hour; only when status is ready
+        error:
+          type: [string, "null"]
+
+    FactionStats:
+      type: object
+      required: [members, activeMembers, hexesOwnedR9, hexesOwnedR7]
+      additionalProperties: false
+      properties:
+        members:
+          type: integer
+          minimum: 0
+        activeMembers:
+          type: integer
+          minimum: 0
+        hexesOwnedR9:
+          type: integer
+          minimum: 0
+        hexesOwnedR7:
+          type: integer
+          minimum: 0
+
+    Faction:
+      type: object
+      required: [id, slug, name, emoji, colorLight, colorDark, sort, stats]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        name:
+          type: string
+        emoji:
+          type: string
+        colorLight:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        colorDark:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+        sort:
+          type: integer
+        stats:
+          $ref: "#/components/schemas/FactionStats"
+
+    FactionsResponse:
+      type: object
+      required: [factions, suggestedFactionId, activeWindowDays]
+      additionalProperties: false
+      properties:
+        factions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Faction"
+        suggestedFactionId:
+          type: integer
+        activeWindowDays:
+          type: integer
+          description: The window used for activeMembers (14)
+
+    Error:
+      type: object
+      description: |
+        Shared error envelope returned by every non-2xx response (feature 001). `code` is a stable
+        machine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers, never
+        shown verbatim to players; `details` carries structured context.
+      required: [error, requestId]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]+$"
+              examples:
+                - VALIDATION_FAILED
+                - NOT_FOUND
+                - INTERNAL_ERROR
+                - DB_UNAVAILABLE
+                - UNAUTHORIZED
+                - TOKEN_EXPIRED
+                - ACCOUNT_DELETED
+                - INVALID_APPLE_TOKEN
+                - APPLE_UNAVAILABLE
+                - INVALID_REFRESH_TOKEN
+                - REFRESH_REUSED
+                - FORBIDDEN
+                - FACTION_NOT_FOUND
+                - FACTION_CHANGE_LOCKED
+                - RATE_LIMITED
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        requestId:
+          type: string
+          description: Fastify request id, also returned in the `x-request-id` response header
+
+  responses:
+    BadRequest:
+      description: Request validation failed (code VALIDATION_FAILED)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Too many requests from this client address (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set
+      headers:
+        retry-after:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    DbUnavailable:
+      description: Database not reachable (code DB_UNAVAILABLE)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
