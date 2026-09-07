@@ -1,0 +1,12 @@
+# BuildKit reads <Dockerfile>.dockerignore next to the Dockerfile for builds using that file.
+**/node_modules
+**/dist
+**/coverage
+**/.turbo
+.git
+apps/ios
+ml
+prototype
+docs
+specs
+**/.env

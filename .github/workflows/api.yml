@@ -1,0 +1,91 @@
+# API and packages CI (specs/001-repo-foundations/tasks.md T027, research.md R8).
+#
+# Validation note: GitHub Actions cannot run in the authoring container, so this workflow was
+# validated by parsing it with `yq` and by checking every step against the documented inputs of
+# actions/checkout@v4, pnpm/action-setup@v4 (reads `packageManager` from package.json),
+# actions/setup-node@v4 (`cache: pnpm`), docker/setup-buildx-action@v3 and
+# docker/build-push-action@v6 (`load: true` + `cache-from/to: type=gha`). It turns green in
+# Stream E once the root pnpm-lock.yaml exists (T043): `pnpm install --frozen-lockfile` fails
+# without it by design.
+name: api
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PG_IMAGE: nature-postgres:16-3.4-h3
+  DATABASE_URL: postgres://nature:nature@localhost:5432/nature
+
+jobs:
+  rules:
+    name: rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run lint typecheck test --filter='./packages/*'
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+      - name: Build nature-postgres:16-3.4-h3 (PostGIS + h3-pg)
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/docker/postgres
+          tags: ${{ env.PG_IMAGE }}
+          load: true
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start Postgres
+        run: |
+          docker run -d --name pg \
+            -e POSTGRES_USER=nature -e POSTGRES_PASSWORD=nature -e POSTGRES_DB=nature \
+            -p 5432:5432 "$PG_IMAGE"
+          for i in $(seq 1 60); do
+            if docker exec pg pg_isready -h 127.0.0.1 -U nature -d nature >/dev/null 2>&1; then
+              echo "postgres ready after ${i} attempts"; exit 0
+            fi
+            sleep 2
+          done
+          echo "postgres did not become ready"; docker logs pg; exit 1
+
+      - name: h3-pg smoke test
+        run: |
+          res=$(docker exec pg psql -U nature -d nature -tA -v ON_ERROR_STOP=1 \
+            -c "select h3_get_resolution(h3_lat_lng_to_cell(point(23.9,54.9), 9))")
+          echo "h3_get_resolution -> ${res}"
+          test "$res" = "9"
+          docker exec pg psql -U nature -d nature -tA -c "select postgis_version()"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@nature/api...
+      - run: pnpm turbo run lint typecheck --filter=@nature/api
+      - name: API tests (unit + integration against the built image)
+        run: pnpm --filter @nature/api test

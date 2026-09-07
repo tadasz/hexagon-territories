@@ -1,0 +1,236 @@
+import { eq, sql } from 'drizzle-orm';
+import { afterAll, beforeAll, expect, inject, it } from 'vitest';
+import * as schema from '../../src/db/schema/index.js';
+import { createTestDatabase, describeWithDb, type TestDatabase } from '../helpers/db.js';
+
+/** Every table of specs/001-repo-foundations/data-model.md §4.2–4.6. */
+const EXPECTED_TABLES = [
+  'factions',
+  'users',
+  'refresh_tokens',
+  'devices',
+  'walk_sessions',
+  'location_samples',
+  'walk_hex_meters',
+  'hex_week_contribution',
+  'hex_faction_strength',
+  'hex_state',
+  'hex_ownership_events',
+  'hex_parent_state',
+  'reckonings',
+  'species',
+  'species_region',
+  'species_season',
+  'captures',
+  'capture_candidates',
+  'user_species',
+  'points_ledger',
+  'streaks',
+  'leaderboard_snapshots',
+  'faction_stats_weekly',
+  'anti_cheat_flags',
+];
+
+const EXPECTED_ENUMS = [
+  'kingdom',
+  'capture_status',
+  'ledger_kind',
+  'user_role',
+  'walk_status',
+  'candidate_source',
+  'reckoning_status',
+];
+
+// Kaunas town hall area, res 9 and its parents (H3 indexes as bigint).
+const CELL = {
+  r9: BigInt('0x891f1d4a2c3ffff'),
+  r8: BigInt('0x881f1d4a2dfffff'),
+  r7: BigInt('0x871f1d4a2ffffff'),
+  r6: BigInt('0x861f1d4afffffff'),
+  r5: BigInt('0x851f1d4bfffffff'),
+};
+const POLYGON_WKT =
+  'POLYGON((23.884 54.895,23.888 54.895,23.888 54.898,23.884 54.898,23.884 54.895))';
+
+describeWithDb('schema migration (data-model.md §4)', () => {
+  const adminUrl = inject('adminDatabaseUrl');
+  let tdb: TestDatabase;
+
+  beforeAll(async () => {
+    if (!adminUrl) throw new Error('adminDatabaseUrl was not provided by global setup');
+    tdb = await createTestDatabase(adminUrl);
+  });
+  afterAll(async () => {
+    await tdb?.close();
+  });
+
+  it('creates every table', async () => {
+    const { rows } = await tdb.pool.query<{ table_name: string }>(
+      `select table_name from information_schema.tables
+       where table_schema = 'public' and table_type = 'BASE TABLE'`,
+    );
+    const names = rows.map((row) => row.table_name);
+    expect(names).toEqual(expect.arrayContaining(EXPECTED_TABLES));
+    for (const table of EXPECTED_TABLES) expect(names, `missing table ${table}`).toContain(table);
+  });
+
+  it('creates the seven enums', async () => {
+    const { rows } = await tdb.pool.query<{ typname: string }>(
+      `select typname from pg_type where typtype = 'e' order by typname`,
+    );
+    expect(rows.map((row) => row.typname)).toEqual(expect.arrayContaining(EXPECTED_ENUMS));
+  });
+
+  it('partitions location_samples by range on ts with a default and monthly partitions', async () => {
+    const strategy = await tdb.pool.query<{ partstrat: string; partkey: string }>(
+      `select pt.partstrat, pg_get_partkeydef(pt.partrelid) as partkey
+       from pg_partitioned_table pt join pg_class c on c.oid = pt.partrelid
+       where c.relname = 'location_samples'`,
+    );
+    expect(strategy.rows).toEqual([{ partstrat: 'r', partkey: 'RANGE (ts)' }]);
+
+    const partitions = await tdb.pool.query<{ relname: string }>(
+      `select c.relname from pg_inherits i join pg_class c on c.oid = i.inhrelid
+       join pg_class p on p.oid = i.inhparent where p.relname = 'location_samples' order by 1`,
+    );
+    const names = partitions.rows.map((row) => row.relname);
+    expect(names).toContain('location_samples_default');
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+    expect(names).toContain(`location_samples_y${y}m${m}`);
+    expect(names.filter((name) => /^location_samples_y\d{4}m\d{2}$/.test(name)).length).toBe(2);
+  });
+
+  it('seeds the three factions', async () => {
+    const rows = await tdb.db.select().from(schema.factions).orderBy(schema.factions.sort);
+    expect(rows.map((row) => [row.id, row.slug, row.emoji])).toEqual([
+      [1, 'owls', '🦉'],
+      [2, 'foxes', '🦊'],
+      [3, 'deer', '🦌'],
+    ]);
+  });
+
+  it('has PostGIS and reports whether h3-pg is present (optional)', async () => {
+    const postgis = await tdb.pool.query<{ postgis_version: string }>('select postgis_version()');
+    expect(postgis.rows[0]?.postgis_version).toMatch(/^3\./);
+
+    const h3 = await tdb.pool.query<{ extname: string }>(
+      `select extname from pg_extension where extname in ('h3', 'h3_postgis') order by 1`,
+    );
+    const present = h3.rows.map((row) => row.extname);
+    console.info(`h3-pg extensions present: ${present.length ? present.join(', ') : 'none'}`);
+    if (present.includes('h3')) {
+      const res = await tdb.pool.query<{ r: number }>(
+        `select h3_get_resolution(h3_lat_lng_to_cell(point(23.9, 54.9), 9)) as r`,
+      );
+      expect(res.rows[0]?.r).toBe(9);
+    }
+  });
+
+  it('inserts a faction, a user and a hex_state row that round-trip through Drizzle', async () => {
+    await tdb.db.insert(schema.factions).values({
+      id: 9,
+      slug: 'test-faction',
+      name: 'Test',
+      emoji: '🧪',
+      colorLight: '#000000',
+      colorDark: '#ffffff',
+      sort: 9,
+    });
+
+    const [user] = await tdb.db
+      .insert(schema.users)
+      .values({ appleSub: 'apple-sub-test', displayName: 'Tester', factionId: 9 })
+      .returning({ id: schema.users.id, role: schema.users.role, xp: schema.users.xp });
+    expect(user).toMatchObject({ role: 'player', xp: 0 });
+    expect(user?.id).toMatch(/^[0-9a-f-]{36}$/);
+
+    await tdb.db.insert(schema.hexState).values({
+      h3R9: CELL.r9,
+      h3R8: CELL.r8,
+      h3R7: CELL.r7,
+      h3R6: CELL.r6,
+      h3R5: CELL.r5,
+      geom: POLYGON_WKT,
+      ownerFactionId: 9,
+      ownerSinceWeek: '2026-W36',
+      captainUserId: user?.id,
+    });
+
+    const [row] = await tdb.db
+      .select({
+        h3R9: schema.hexState.h3R9,
+        h3R8: schema.hexState.h3R8,
+        h3R7: schema.hexState.h3R7,
+        h3R6: schema.hexState.h3R6,
+        h3R5: schema.hexState.h3R5,
+        ownerFactionId: schema.hexState.ownerFactionId,
+        ownerSinceWeek: schema.hexState.ownerSinceWeek,
+        captainUserId: schema.hexState.captainUserId,
+        version: schema.hexState.version,
+        srid: sql<number>`ST_SRID(${schema.hexState.geom})`,
+        sameGeom: sql<boolean>`ST_Equals(${schema.hexState.geom}, ST_GeomFromText(${POLYGON_WKT}, 4326))`,
+        wkt: sql<string>`ST_AsText(${schema.hexState.geom})`,
+      })
+      .from(schema.hexState)
+      .where(eq(schema.hexState.h3R9, CELL.r9));
+
+    expect(row).toMatchObject({
+      h3R9: CELL.r9,
+      h3R8: CELL.r8,
+      h3R7: CELL.r7,
+      h3R6: CELL.r6,
+      h3R5: CELL.r5,
+      ownerFactionId: 9,
+      ownerSinceWeek: '2026-W36',
+      captainUserId: user?.id,
+      version: 0,
+      srid: 4326,
+      sameGeom: true,
+    });
+    expect(row?.wkt).toMatch(/^POLYGON\(\(/);
+  });
+
+  it('routes a location sample into the partition of its month', async () => {
+    const [user] = await tdb.db
+      .insert(schema.users)
+      .values({ appleSub: 'apple-sub-walker', displayName: 'Walker', factionId: 1 })
+      .returning({ id: schema.users.id });
+    const ts = new Date();
+    const [walk] = await tdb.db
+      .insert(schema.walkSessions)
+      .values({ userId: user!.id, clientWalkId: crypto.randomUUID(), factionId: 1, startedAt: ts })
+      .returning({
+        id: schema.walkSessions.id,
+        status: schema.walkSessions.status,
+        flags: schema.walkSessions.flags,
+      });
+    expect(walk).toMatchObject({ status: 'active', flags: [] });
+
+    await tdb.db.insert(schema.locationSamples).values({
+      walkId: walk!.id,
+      seq: 0,
+      ts,
+      lat: 54.8969,
+      lon: 23.8862,
+      hAcc: 8,
+      speed: 1.4,
+    });
+
+    const { rows } = await tdb.pool.query<{ partition: string }>(
+      `select tableoid::regclass::text as partition from location_samples where walk_id = $1`,
+      [walk!.id],
+    );
+    const y = ts.getUTCFullYear();
+    const m = String(ts.getUTCMonth() + 1).padStart(2, '0');
+    expect(rows).toEqual([{ partition: `location_samples_y${y}m${m}` }]);
+
+    // ON DELETE CASCADE reaches through the partitioned table.
+    await tdb.db.delete(schema.walkSessions).where(eq(schema.walkSessions.id, walk!.id));
+    const left = await tdb.pool.query(`select 1 from location_samples where walk_id = $1`, [
+      walk!.id,
+    ]);
+    expect(left.rowCount).toBe(0);
+  });
+});
