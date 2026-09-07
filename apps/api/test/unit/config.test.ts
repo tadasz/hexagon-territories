@@ -36,6 +36,13 @@ describe('loadConfig', () => {
         accessKey: undefined,
         secretKey: undefined,
       },
+      walks: {
+        autofinishAfterH: 12,
+        sampleRetentionDays: 30,
+        xpDailyCap: 300,
+        ingestBatchesPer15Min: 30,
+        samplesPerDay: 8640,
+      },
     });
   });
 
@@ -57,6 +64,18 @@ describe('loadConfig', () => {
       S3_SECRET_KEY: 'naturenature',
       S3_PUBLIC_ENDPOINT: 'http://192.168.1.10:9000',
       S3_REGION: 'fsn1',
+      WALK_AUTOFINISH_AFTER_H: '6',
+      WALK_SAMPLE_RETENTION_DAYS: '10',
+      WALK_XP_DAILY_CAP: '50',
+      WALK_INGEST_BATCHES_PER_15MIN: '100',
+      WALK_SAMPLES_PER_DAY: '20000',
+    });
+    expect(config.walks).toEqual({
+      autofinishAfterH: 6,
+      sampleRetentionDays: 10,
+      xpDailyCap: 50,
+      ingestBatchesPer15Min: 100,
+      samplesPerDay: 20000,
     });
     expect(config.port).toBe(4100);
     expect(config.jobsEnabled).toBe(false);

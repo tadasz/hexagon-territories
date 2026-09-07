@@ -29,6 +29,13 @@
       "when": 1788815820664,
       "tag": "0003_auth_exports",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788818821593,
+      "tag": "0004_walks",
+      "breakpoints": true
     }
   ]
 }

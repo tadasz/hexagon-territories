@@ -1,6 +1,7 @@
 /**
  * Stable, machine-readable error codes shared with the iOS client (contracts/openapi.yaml of
- * features 001 and 002; specs/002-auth-and-factions/data-model.md §2.6).
+ * features 001, 002 and 003; specs/002-auth-and-factions/data-model.md §2.6,
+ * specs/003-walk-tracking/data-model.md §2.5).
  */
 export const ERROR_CODES = {
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -20,6 +21,13 @@ export const ERROR_CODES = {
   FACTION_CHANGE_LOCKED: 'FACTION_CHANGE_LOCKED',
   RATE_LIMITED: 'RATE_LIMITED',
   EXPORT_FAILED: 'EXPORT_FAILED',
+  // feature 003 (specs/003-walk-tracking/data-model.md §2.5)
+  WALK_NOT_FOUND: 'WALK_NOT_FOUND',
+  WALK_NOT_ACTIVE: 'WALK_NOT_ACTIVE',
+  WALK_OVERLAP: 'WALK_OVERLAP',
+  FACTION_REQUIRED: 'FACTION_REQUIRED',
+  INVALID_ENDED_AT: 'INVALID_ENDED_AT',
+  SAMPLE_QUOTA_EXCEEDED: 'SAMPLE_QUOTA_EXCEEDED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

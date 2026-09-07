@@ -21,6 +21,14 @@ import { geographyLineString } from './postgis.js';
 import { devices, users } from './users.js';
 
 export type WalkFlag = 'teleport' | 'speed' | 'distance' | 'no_steps';
+/** Who finished the walk (specs/003-walk-tracking/data-model.md §1.1); null while active. */
+export type FinishReason = 'client' | 'autofinish' | 'superseded';
+/** `deviceInfo` of `POST /v1/walks`, kept as-is (devices rows belong to push, feature 008). */
+export interface WalkDeviceInfo {
+  model?: string;
+  osVersion?: string;
+  appVersion?: string;
+}
 
 export const walkSessions = pgTable(
   'walk_sessions',
@@ -48,6 +56,11 @@ export const walkSessions = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+    // feature 003 (migration 0004_walks)
+    finishReason: text('finish_reason').$type<FinishReason>(),
+    deviceInfo: jsonb('device_info').$type<WalkDeviceInfo>(),
+    xpAwarded: integer('xp_awarded').notNull().default(0),
+    scored: boolean('scored').notNull().default(false),
   },
   (t) => [
     unique('walk_sessions_user_client_walk_unique').on(t.userId, t.clientWalkId),
@@ -57,6 +70,10 @@ export const walkSessions = pgTable(
       .on(t.userId)
       .where(sql`status = 'active'`),
     index('walk_sessions_week_id_idx').on(t.weekId),
+    // walk.autofinish scan (feature 003).
+    index('walk_sessions_active_started_idx')
+      .on(t.startedAt)
+      .where(sql`status = 'active'`),
   ],
 );
 
@@ -97,6 +114,8 @@ export const walkHexMeters = pgTable(
       .references(() => walkSessions.id, { onDelete: 'cascade' }),
     h3R9: bigint('h3_r9', { mode: 'bigint' }).notNull(),
     meters: real('meters').notNull(),
+    /** Metres of this walk that counted toward the weekly cap (0 when flagged); feature 003. */
+    cappedMeters: real('capped_meters').notNull().default(0),
   },
   (t) => [
     primaryKey({ name: 'walk_hex_meters_pkey', columns: [t.walkId, t.h3R9] }),

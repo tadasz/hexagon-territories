@@ -21,7 +21,7 @@ export interface JobsPluginOptions {
   retryMs?: number;
   /** Job dependencies beyond the Fastify decorators (`db`, `storage`, `log`). */
   clock?: Clock;
-  config: Pick<AppConfig, 'account' | 'jwt'>;
+  config: Pick<AppConfig, 'account' | 'jwt' | 'walks'>;
 }
 
 declare module 'fastify' {

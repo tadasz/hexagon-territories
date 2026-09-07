@@ -1,0 +1,45 @@
+{
+  "name": "@nature/walk-sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GPX/GeoJSON → timed sample batches: replays tracks against the Nature Explorer API as a signed-in player and prints the expected per-hex metres (the oracle of the API integration tests)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "walk-sim": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "samples"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist coverage .turbo",
+    "walk-sim": "tsx src/cli.ts",
+    "samples:generate": "tsx scripts/generate-samples.ts"
+  },
+  "dependencies": {
+    "@nature/territory-rules": "workspace:*",
+    "commander": "^13.1.0",
+    "fast-xml-parser": "^5.11.1"
+  },
+  "devDependencies": {
+    "@nature/h3-fixtures": "workspace:*",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.23.13",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

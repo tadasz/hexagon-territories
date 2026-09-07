@@ -1,8 +1,12 @@
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle, type NodePgDatabase, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+import type { PgDatabase } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 import * as schema from './schema/index.js';
 
 export type Db = NodePgDatabase<typeof schema>;
+/** A `Db` or the transaction handle `db.transaction(async (tx) => …)` hands out. */
+export type DbLike = PgDatabase<NodePgQueryResultHKT, typeof schema>;
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 export type Pool = pg.Pool;
 
 export interface PoolOptions {

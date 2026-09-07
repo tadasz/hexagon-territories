@@ -27,6 +27,11 @@ const EXPECTED_OPERATIONS: Record<string, Record<string, string>> = {
   '/v1/me': { get: 'getMe', patch: 'updateMe', delete: 'deleteMe' },
   '/v1/me/faction': { post: 'selectFaction' },
   '/v1/me/export': { get: 'getExport' },
+  // feature 003
+  '/v1/walks': { post: 'createWalk', get: 'listWalks' },
+  '/v1/walks/{id}/samples': { post: 'uploadWalkSamples' },
+  '/v1/walks/{id}/finish': { post: 'finishWalk' },
+  '/v1/walks/{id}': { get: 'getWalk' },
 };
 
 const EXPECTED_SCHEMAS = [
@@ -45,6 +50,21 @@ const EXPECTED_SCHEMAS = [
   'FactionStats',
   'Faction',
   'FactionsResponse',
+  // feature 003
+  'WalkCreateRequest',
+  'WalkCreated',
+  'LocationSample',
+  'PedometerWindow',
+  'SampleBatchRequest',
+  'RejectedSample',
+  'SampleBatchResult',
+  'WalkFinishRequest',
+  'WeekStanding',
+  'WalkHex',
+  'LineString',
+  'WalkSummary',
+  'WalkListItem',
+  'WalkListPage',
 ];
 
 describe('GET /openapi.json', () => {
@@ -78,7 +98,7 @@ describe('GET /openapi.json', () => {
     expect(doc.paths['/openapi.json']?.get?.operationId).toBe('getOpenApiDocument');
   });
 
-  it('describes every path and operationId of the 002 contract', () => {
+  it('describes every path and operationId of the 002 and 003 contracts', () => {
     expect(Object.keys(doc.paths).sort()).toEqual(Object.keys(EXPECTED_OPERATIONS).sort());
     for (const [path, methods] of Object.entries(EXPECTED_OPERATIONS)) {
       for (const [method, operationId] of Object.entries(methods)) {
@@ -99,6 +119,15 @@ describe('GET /openapi.json', () => {
     expect(security('/v1/me/faction', 'post')).toEqual([{ bearerAuth: [] }]);
     expect(security('/v1/me/export', 'get')).toEqual([{ bearerAuth: [] }]);
     expect(security('/v1/auth/logout', 'post')).toEqual([{ bearerAuth: [] }]);
+    for (const [path, methods] of Object.entries(EXPECTED_OPERATIONS)) {
+      if (!path.startsWith('/v1/walks')) continue;
+      for (const method of Object.keys(methods)) {
+        expect(security(path, method), `${method} ${path}`).toEqual([{ bearerAuth: [] }]);
+        expect((doc.paths[path]?.[method] as { tags?: string[] } | undefined)?.tags).toEqual([
+          'walks',
+        ]);
+      }
+    }
     expect(security('/v1/auth/apple', 'post')).toEqual([]);
     expect(security('/v1/auth/refresh', 'post')).toEqual([]);
     expect(security('/v1/factions', 'get')).toEqual([]);
@@ -133,6 +162,90 @@ describe('GET /openapi.json', () => {
       '202',
       '401',
     ]);
+  });
+
+  it('describes the walk operations as the 003 contract does', () => {
+    expect(Object.keys(doc.paths['/v1/walks']?.post?.responses ?? {}).sort()).toEqual([
+      '200',
+      '201',
+      '400',
+      '401',
+      '403',
+      '409',
+      '429',
+    ]);
+    expect(Object.keys(doc.paths['/v1/walks/{id}/samples']?.post?.responses ?? {})).toEqual([
+      '200',
+      '400',
+      '401',
+      '404',
+      '409',
+      '429',
+    ]);
+    expect(Object.keys(doc.paths['/v1/walks/{id}/finish']?.post?.responses ?? {})).toEqual([
+      '200',
+      '400',
+      '401',
+      '404',
+    ]);
+    expect(Object.keys(doc.paths['/v1/walks/{id}']?.get?.responses ?? {})).toEqual([
+      '200',
+      '401',
+      '404',
+    ]);
+    expect(doc.components.schemas.WalkSummary?.required).toEqual([
+      'walkId',
+      'clientWalkId',
+      'status',
+      'finishReason',
+      'startedAt',
+      'endedAt',
+      'finishedAt',
+      'weekId',
+      'distanceM',
+      'durationS',
+      'steps',
+      'sampleCount',
+      'hexCount',
+      'xp',
+      'scored',
+      'flags',
+      'hexes',
+      'path',
+    ]);
+    expect(doc.components.schemas.WalkListItem?.required).toEqual([
+      'walkId',
+      'clientWalkId',
+      'status',
+      'finishReason',
+      'startedAt',
+      'endedAt',
+      'weekId',
+      'distanceM',
+      'durationS',
+      'hexCount',
+      'xp',
+      'scored',
+      'flags',
+    ]);
+    expect(doc.components.schemas.SampleBatchResult?.required).toEqual([
+      'stored',
+      'duplicates',
+      'accepted',
+      'rejected',
+      'sampleCount',
+    ]);
+    expect(doc.components.schemas.WeekStanding?.required).toEqual([
+      'leader',
+      'myFactionShare',
+      'owner',
+    ]);
+    expect(JSON.stringify(doc.paths['/v1/walks/{id}/finish']?.post?.responses)).toContain(
+      '#/components/schemas/WalkSummary',
+    );
+    expect(JSON.stringify(doc.components.schemas.WalkSummary)).toContain(
+      '#/components/schemas/LineString',
+    );
   });
 
   it('exposes the shared Error and HealthResponse component schemas', () => {

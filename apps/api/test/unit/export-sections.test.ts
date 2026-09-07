@@ -54,11 +54,13 @@ const SAMPLE_SECTIONS: ExportSection[] = [
 ];
 
 describe('export sections', () => {
-  it('registers account, factions and sessions with unique names', () => {
+  it('registers account, factions, sessions and the 003 walks/points sections with unique names', () => {
     expect(EXPORT_SECTIONS.map((section) => section.name)).toEqual([
       'account',
       'factions',
       'sessions',
+      'walks',
+      'points',
     ]);
     expect(() => validateExportSections()).not.toThrow();
   });

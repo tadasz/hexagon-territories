@@ -9,22 +9,27 @@ import {
 const noop = () => Promise.resolve(0);
 
 describe('purge registry', () => {
-  it('registers the 002 steps in order with users last', () => {
+  it('registers the 002 steps and the 003 walks step in order with users last', () => {
     expect(() => validatePurgeSteps()).not.toThrow();
     expect(PURGE_STEPS.map((step) => step.name)).toEqual([
       'exports',
       'refresh_tokens',
       'devices',
-      'anti_cheat_flags',
+      'walks',
       'captures',
-      'walk_sessions',
-      'hex_week_contribution',
-      'points_ledger',
       'leaderboard_snapshots',
       'users',
     ]);
     expect(PURGE_STEPS[PURGE_STEPS.length - 1]?.tables).toEqual(['users']);
     expect(purgeCoveredTables()).toContain('account_exports');
+    // feature 003 (modules/walks/purge.ts): the four tables with a users FK that walks write
+    const walks = PURGE_STEPS.find((step) => step.name === 'walks');
+    expect(walks?.tables).toEqual([
+      'points_ledger',
+      'anti_cheat_flags',
+      'hex_week_contribution',
+      'walk_sessions',
+    ]);
   });
 
   it('rejects duplicate names', () => {

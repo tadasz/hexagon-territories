@@ -130,6 +130,39 @@ describeWithDb('schema migration (data-model.md §4)', () => {
     console.info('feature 002 schema: account_exports + users_faction_active_idx present');
   });
 
+  it('migration 0004 adds the walk finish columns, capped_meters and the autofinish index', async () => {
+    const columns = await tdb.pool.query<{
+      column_name: string;
+      data_type: string;
+      column_default: string | null;
+      is_nullable: string;
+    }>(
+      `select column_name, data_type, column_default, is_nullable from information_schema.columns
+       where table_name = 'walk_sessions' and column_name in ('finish_reason', 'device_info', 'xp_awarded', 'scored')
+       order by column_name`,
+    );
+    expect(columns.rows).toEqual([
+      { column_name: 'device_info', data_type: 'jsonb', column_default: null, is_nullable: 'YES' },
+      { column_name: 'finish_reason', data_type: 'text', column_default: null, is_nullable: 'YES' },
+      { column_name: 'scored', data_type: 'boolean', column_default: 'false', is_nullable: 'NO' },
+      { column_name: 'xp_awarded', data_type: 'integer', column_default: '0', is_nullable: 'NO' },
+    ]);
+    const capped = await tdb.pool.query<{ data_type: string; column_default: string | null }>(
+      `select data_type, column_default from information_schema.columns
+       where table_name = 'walk_hex_meters' and column_name = 'capped_meters'`,
+    );
+    expect(capped.rows).toEqual([{ data_type: 'real', column_default: '0' }]);
+    const index = await tdb.pool.query<{ indexdef: string }>(
+      `select indexdef from pg_indexes where indexname = 'walk_sessions_active_started_idx'`,
+    );
+    expect(index.rows[0]?.indexdef).toMatch(
+      /\(started_at\) WHERE \(status = 'active'::walk_status\)/,
+    );
+    console.info(
+      'feature 003 schema: walk_sessions finish columns + walk_sessions_active_started_idx present',
+    );
+  });
+
   it('partitions location_samples by range on ts with a default and monthly partitions', async () => {
     const strategy = await tdb.pool.query<{ partstrat: string; partkey: string }>(
       `select pt.partstrat, pg_get_partkeydef(pt.partrelid) as partkey

@@ -8,17 +8,27 @@ import { systemClock } from '../lib/time.js';
 import { ACCOUNT_EXPORT, runAccountExport } from './account-export.js';
 import { ACCOUNT_PURGE, runAccountPurge } from './account-purge.js';
 import { RECKONING_WEEKLY, runReckoningWeekly } from './reckoning-weekly.js';
+import { SAMPLES_PURGE, runSamplesPurge } from './samples-purge.js';
+import { WALK_AUTOFINISH, runWalkAutofinish } from './walk-autofinish.js';
 
 /**
  * Manual job runner, in-process against DATABASE_URL (the same handlers pg-boss invokes):
  *
  *   pnpm --filter @nature/api job:reckoning
+ *   pnpm --filter @nature/api job:autofinish              # finishes walks active for > 12 h
+ *   pnpm --filter @nature/api job:purge-samples           # drops sample partitions older than 30 days
  *   pnpm --filter @nature/api job:purge  -- --user <id>   # purges only when the grace period is over
  *   pnpm --filter @nature/api job:export -- --user <id>   # creates a pending export, builds it (real S3)
  *
  * Exits 0 on success, 1 on failure, 2 for an unknown job name or missing arguments.
  */
-const JOB_NAMES = [RECKONING_WEEKLY, ACCOUNT_PURGE, ACCOUNT_EXPORT] as const;
+const JOB_NAMES = [
+  RECKONING_WEEKLY,
+  WALK_AUTOFINISH,
+  SAMPLES_PURGE,
+  ACCOUNT_PURGE,
+  ACCOUNT_EXPORT,
+] as const;
 
 const { values, positionals } = parseArgs({
   // `pnpm run job:purge -- --user <id>` forwards the `--` separator; drop it so `--user` is parsed.
@@ -75,6 +85,21 @@ try {
       { exportId: row!.id, userId: values.user as string },
       { finalAttempt: true },
     );
+  } else if (jobName === WALK_AUTOFINISH) {
+    result = await runWalkAutofinish({
+      db,
+      clock: systemClock,
+      log,
+      afterH: config.walks.autofinishAfterH,
+      xpDailyCap: config.walks.xpDailyCap,
+    });
+  } else if (jobName === SAMPLES_PURGE) {
+    result = await runSamplesPurge({
+      db,
+      clock: systemClock,
+      log,
+      retentionDays: config.walks.sampleRetentionDays,
+    });
   } else {
     result = await runReckoningWeekly(log);
   }

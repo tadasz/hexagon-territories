@@ -32,14 +32,26 @@ describeWithDb('pg-boss on the shared pool', () => {
     expect(rows).toEqual([{ name: 'reckoning.weekly', cron: '0 0 * * 1', timezone: 'UTC' }]);
   });
 
-  it('created the three queues of feature 002', async () => {
+  it('created the three queues of feature 002 and the two of feature 003', async () => {
     const { rows } = await tdb.pool.query<{ name: string }>(
-      `select name from pgboss.queue where name in ('reckoning.weekly', 'account.purge', 'account.export') order by name`,
+      `select name from pgboss.queue where name in ('reckoning.weekly', 'account.purge', 'account.export', 'walk.autofinish', 'samples.purge') order by name`,
     );
     expect(rows).toEqual([
       { name: 'account.export' },
       { name: 'account.purge' },
       { name: 'reckoning.weekly' },
+      { name: 'samples.purge' },
+      { name: 'walk.autofinish' },
+    ]);
+  });
+
+  it('schedules walk.autofinish hourly and samples.purge daily at 03:30 UTC', async () => {
+    const { rows } = await tdb.pool.query<{ name: string; cron: string; timezone: string }>(
+      `select name, cron, timezone from pgboss.schedule where name in ('walk.autofinish', 'samples.purge') order by name`,
+    );
+    expect(rows).toEqual([
+      { name: 'samples.purge', cron: '30 3 * * *', timezone: 'UTC' },
+      { name: 'walk.autofinish', cron: '0 * * * *', timezone: 'UTC' },
     ]);
   });
 

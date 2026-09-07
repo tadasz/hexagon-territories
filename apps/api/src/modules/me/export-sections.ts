@@ -4,6 +4,7 @@ import type { Db } from '../../db/client.js';
 import { factions, refreshTokens, users } from '../../db/schema/index.js';
 import { addDays } from '../../lib/time.js';
 import { DateTime, Nullable, StringEnum } from '../../schemas/common.js';
+import { pointsExportSection, walksExportSection } from '../walks/export-section.js';
 import { USER_ROLES } from './schemas.js';
 
 export const EXPORT_VERSION = 1;
@@ -56,7 +57,7 @@ const SessionSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** Shape of the bundle produced by feature 002 (later features add properties). */
+/** Shape of the bundle produced by feature 002 (feature 003 adds `walks` and `points`). */
 export const ExportBundleSchema = Type.Object(
   {
     exportVersion: Type.Literal(EXPORT_VERSION),
@@ -128,6 +129,9 @@ export const EXPORT_SECTIONS: readonly ExportSection[] = [
   accountSection,
   factionsSection,
   sessionsSection,
+  // feature 003 (modules/walks/export-section.ts)
+  walksExportSection,
+  pointsExportSection,
 ];
 
 export function validateExportSections(sections: readonly ExportSection[] = EXPORT_SECTIONS): void {

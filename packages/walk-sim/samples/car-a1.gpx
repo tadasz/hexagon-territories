@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="@nature/walk-sim samples:generate (seed 20260907)" xmlns="http://www.topografix.com/GPX/1/1" xmlns:ne="https://natureexplorer.app/gpx/walk-sim/1">
+  <metadata>
+    <name>car-a1</name>
+    <desc>About 5.3 km drive along Savanorių prospektas towards the A1 from 54.9050 N, 23.9400 E to 54.9300 N, 24.0100 E at 20 m/s with the device speed hidden and 60 pedometer steps; expected flags: teleport, speed, no_steps</desc>
+  </metadata>
+  <trk>
+    <name>car-a1</name>
+    <extensions>
+      <ne:pedometerSteps>60</ne:pedometerSteps>
+      <ne:reportSpeed>false</ne:reportSpeed>
+    </extensions>
+    <trkseg>
+      <trkpt lat="54.9050000" lon="23.9400000"><time>2026-09-07T08:00:00Z</time></trkpt>
+      <trkpt lat="54.9054069" lon="23.9413950"><time>2026-09-07T08:00:05Z</time></trkpt>
+      <trkpt lat="54.9058138" lon="23.9427901"><time>2026-09-07T08:00:10Z</time></trkpt>
+      <trkpt lat="54.9062206" lon="23.9441851"><time>2026-09-07T08:00:15Z</time></trkpt>
+      <trkpt lat="54.9066275" lon="23.9455801"><time>2026-09-07T08:00:20Z</time></trkpt>
+      <trkpt lat="54.9070344" lon="23.9469751"><time>2026-09-07T08:00:25Z</time></trkpt>
+      <trkpt lat="54.9074413" lon="23.9483702"><time>2026-09-07T08:00:30Z</time></trkpt>
+      <trkpt lat="54.9078482" lon="23.9497652"><time>2026-09-07T08:00:35Z</time></trkpt>
+      <trkpt lat="54.9082551" lon="23.9511602"><time>2026-09-07T08:00:40Z</time></trkpt>
+      <trkpt lat="54.9086427" lon="23.9525710"><time>2026-09-07T08:00:45Z</time></trkpt>
+      <trkpt lat="54.9090014" lon="23.9540056"><time>2026-09-07T08:00:50Z</time></trkpt>
+      <trkpt lat="54.9093601" lon="23.9554403"><time>2026-09-07T08:00:55Z</time></trkpt>
+      <trkpt lat="54.9097187" lon="23.9568749"><time>2026-09-07T08:01:00Z</time></trkpt>
+      <trkpt lat="54.9100774" lon="23.9583095"><time>2026-09-07T08:01:05Z</time></trkpt>
+      <trkpt lat="54.9104360" lon="23.9597442"><time>2026-09-07T08:01:10Z</time></trkpt>
+      <trkpt lat="54.9107947" lon="23.9611788"><time>2026-09-07T08:01:15Z</time></trkpt>
+      <trkpt lat="54.9111534" lon="23.9626134"><time>2026-09-07T08:01:20Z</time></trkpt>
+      <trkpt lat="54.9115120" lon="23.9640481"><time>2026-09-07T08:01:25Z</time></trkpt>
+      <trkpt lat="54.9118707" lon="23.9654827"><time>2026-09-07T08:01:30Z</time></trkpt>
+      <trkpt lat="54.9122293" lon="23.9669173"><time>2026-09-07T08:01:35Z</time></trkpt>
+      <trkpt lat="54.9126082" lon="23.9683345"><time>2026-09-07T08:01:40Z</time></trkpt>
+      <trkpt lat="54.9130493" lon="23.9696980"><time>2026-09-07T08:01:45Z</time></trkpt>
+      <trkpt lat="54.9134905" lon="23.9710614"><time>2026-09-07T08:01:50Z</time></trkpt>
+      <trkpt lat="54.9139316" lon="23.9724249"><time>2026-09-07T08:01:55Z</time></trkpt>
+      <trkpt lat="54.9143727" lon="23.9737884"><time>2026-09-07T08:02:00Z</time></trkpt>
+      <trkpt lat="54.9148138" lon="23.9751518"><time>2026-09-07T08:02:05Z</time></trkpt>
+      <trkpt lat="54.9152549" lon="23.9765153"><time>2026-09-07T08:02:10Z</time></trkpt>
+      <trkpt lat="54.9156961" lon="23.9778788"><time>2026-09-07T08:02:15Z</time></trkpt>
+      <trkpt lat="54.9161372" lon="23.9792422"><time>2026-09-07T08:02:20Z</time></trkpt>
+      <trkpt lat="54.9165783" lon="23.9806057"><time>2026-09-07T08:02:25Z</time></trkpt>
+      <trkpt lat="54.9170194" lon="23.9819691"><time>2026-09-07T08:02:30Z</time></trkpt>
+      <trkpt lat="54.9174606" lon="23.9833326"><time>2026-09-07T08:02:35Z</time></trkpt>
+      <trkpt lat="54.9179017" lon="23.9846961"><time>2026-09-07T08:02:40Z</time></trkpt>
+      <trkpt lat="54.9184392" lon="23.9859459"><time>2026-09-07T08:02:45Z</time></trkpt>
+      <trkpt lat="54.9190043" lon="23.9871632"><time>2026-09-07T08:02:50Z</time></trkpt>
+      <trkpt lat="54.9195695" lon="23.9883804"><time>2026-09-07T08:02:55Z</time></trkpt>
+      <trkpt lat="54.9201346" lon="23.9895977"><time>2026-09-07T08:03:00Z</time></trkpt>
+      <trkpt lat="54.9206998" lon="23.9908149"><time>2026-09-07T08:03:05Z</time></trkpt>
+      <trkpt lat="54.9212649" lon="23.9920322"><time>2026-09-07T08:03:10Z</time></trkpt>
+      <trkpt lat="54.9218301" lon="23.9932494"><time>2026-09-07T08:03:15Z</time></trkpt>
+      <trkpt lat="54.9223952" lon="23.9944667"><time>2026-09-07T08:03:20Z</time></trkpt>
+      <trkpt lat="54.9229604" lon="23.9956839"><time>2026-09-07T08:03:25Z</time></trkpt>
+      <trkpt lat="54.9235256" lon="23.9969012"><time>2026-09-07T08:03:30Z</time></trkpt>
+      <trkpt lat="54.9240907" lon="23.9981184"><time>2026-09-07T08:03:35Z</time></trkpt>
+      <trkpt lat="54.9246628" lon="23.9993256"><time>2026-09-07T08:03:40Z</time></trkpt>
+      <trkpt lat="54.9252531" lon="24.0005063"><time>2026-09-07T08:03:45Z</time></trkpt>
+      <trkpt lat="54.9258435" lon="24.0016870"><time>2026-09-07T08:03:50Z</time></trkpt>
+      <trkpt lat="54.9264338" lon="24.0028676"><time>2026-09-07T08:03:55Z</time></trkpt>
+      <trkpt lat="54.9270242" lon="24.0040483"><time>2026-09-07T08:04:00Z</time></trkpt>
+      <trkpt lat="54.9276145" lon="24.0052290"><time>2026-09-07T08:04:05Z</time></trkpt>
+      <trkpt lat="54.9282048" lon="24.0064097"><time>2026-09-07T08:04:10Z</time></trkpt>
+      <trkpt lat="54.9287952" lon="24.0075904"><time>2026-09-07T08:04:15Z</time></trkpt>
+      <trkpt lat="54.9293855" lon="24.0087710"><time>2026-09-07T08:04:20Z</time></trkpt>
+      <trkpt lat="54.9299759" lon="24.0099517"><time>2026-09-07T08:04:25Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

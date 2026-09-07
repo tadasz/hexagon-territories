@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { accountExports } from '../../db/schema/index.js';
 import type { ObjectStorage } from '../../lib/storage.js';
+import { walksPurgeStep } from '../walks/purge.js';
 
 /** The transaction handle the steps run in. */
 export type PurgeTx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -40,11 +41,13 @@ async function runDelete(tx: PurgeTx, table: string, column: string, userId: str
 }
 
 /**
- * Steps in execution order. Tables created by feature 001 for later features (walks, captures,
- * ledger, leaderboards, anti-cheat) have nothing written yet, so they are plain deletes here;
- * the feature that starts writing a table replaces its step (delete or anonymise) as needed.
- * `users` is last: `refresh_tokens`, `devices`, `user_species`, `streaks` and `account_exports`
- * cascade from it; `hex_state.captain_user_id` is `SET NULL`.
+ * Steps in execution order. Tables created by feature 001 for later features (captures,
+ * leaderboards) have nothing written yet, so they are plain deletes here; the feature that
+ * starts writing a table replaces its step (delete or anonymise) as needed — feature 003
+ * registers `walks` (`modules/walks/purge.ts`: ledger, anti-cheat flags, contributions, walks
+ * with their samples and hex metres). `users` is last: `refresh_tokens`, `devices`,
+ * `user_species`, `streaks` and `account_exports` cascade from it; `hex_state.captain_user_id`
+ * is `SET NULL`.
  */
 export const PURGE_STEPS: readonly PurgeStep[] = [
   {
@@ -54,11 +57,8 @@ export const PURGE_STEPS: readonly PurgeStep[] = [
   },
   deleteStep('refresh_tokens', 'refresh_tokens'),
   deleteStep('devices', 'devices'),
-  deleteStep('anti_cheat_flags', 'anti_cheat_flags'),
+  walksPurgeStep,
   deleteStep('captures', 'captures'),
-  deleteStep('walk_sessions', 'walk_sessions'),
-  deleteStep('hex_week_contribution', 'hex_week_contribution'),
-  deleteStep('points_ledger', 'points_ledger'),
   deleteStep('leaderboard_snapshots', 'leaderboard_snapshots'),
   deleteStep('users', 'users', 'id'),
 ];

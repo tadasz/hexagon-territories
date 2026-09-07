@@ -15,7 +15,7 @@ describe('packages/api-schema/openapi.json', () => {
     expect(committed, `openapi.json is stale — run ${SNAPSHOT_COMMAND}`).toBe(generated);
   });
 
-  it('is exported by the package and describes the 002 endpoints', () => {
+  it('is exported by the package and describes the 002 and 003 endpoints', () => {
     expect(OPENAPI_PATH).toBe(SNAPSHOT_PATH);
     const doc = readOpenApiDocument() as {
       openapi: string;
@@ -33,10 +33,23 @@ describe('packages/api-schema/openapi.json', () => {
       '/v1/me',
       '/v1/me/export',
       '/v1/me/faction',
+      '/v1/walks',
+      '/v1/walks/{id}',
+      '/v1/walks/{id}/finish',
+      '/v1/walks/{id}/samples',
     ]);
     expect(doc.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(Object.keys(doc.components.schemas)).toEqual(
-      expect.arrayContaining(['Error', 'Me', 'FactionsResponse', 'TokenPair', 'ExportStatus']),
+      expect.arrayContaining([
+        'Error',
+        'Me',
+        'FactionsResponse',
+        'TokenPair',
+        'ExportStatus',
+        'WalkSummary',
+        'SampleBatchResult',
+        'LineString',
+      ]),
     );
   });
 

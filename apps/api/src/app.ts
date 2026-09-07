@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/routes.js';
 import { factionsRoutes } from './modules/factions/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { meRoutes } from './modules/me/routes.js';
+import { walksRoutes } from './modules/walks/routes.js';
 import { authPlugin, type AuthUserSource } from './plugins/auth.js';
 import { dbPlugin } from './plugins/db.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
@@ -117,6 +118,7 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(authRoutes, { config, clock, verifier });
   await app.register(factionsRoutes, { clock });
   await app.register(meRoutes, { config, clock });
+  await app.register(walksRoutes, { config, clock });
   await app.register(jobsPlugin, {
     enabled: opts.jobs !== false && config.jobsEnabled,
     boss: opts.jobs === false ? undefined : opts.jobs?.boss,

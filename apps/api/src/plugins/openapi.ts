@@ -21,6 +21,7 @@ import {
   MeSchema,
   MeUpdateSchema,
 } from '../modules/me/schemas.js';
+import { WALK_COMPONENT_SCHEMAS } from '../modules/walks/schemas.js';
 import { ErrorSchema } from '../schemas/error.js';
 
 export interface OpenApiPluginOptions {
@@ -54,6 +55,8 @@ export const COMPONENT_SCHEMAS = [
   AuthResponseSchema,
   RefreshRequestSchema,
   LogoutRequestSchema,
+  // feature 003
+  ...WALK_COMPONENT_SCHEMAS,
 ];
 
 /**
@@ -72,7 +75,7 @@ export const openapiPlugin = fp<OpenApiPluginOptions>(
           title: 'Nature Explorer API',
           version: opts.version,
           description:
-            'Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`).',
+            'Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`). Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md "Scoring at walk finish"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons never changes here (feature 004).',
         },
         servers: [{ url: 'http://localhost:3000', description: 'Local development (make dev)' }],
         tags: [
@@ -89,6 +92,10 @@ export const openapiPlugin = fp<OpenApiPluginOptions>(
           {
             name: 'me',
             description: "The signed-in player's profile, faction, deletion and export",
+          },
+          {
+            name: 'walks',
+            description: 'Walk sessions of the signed-in player (paths are private to their owner)',
           },
         ],
         components: {
