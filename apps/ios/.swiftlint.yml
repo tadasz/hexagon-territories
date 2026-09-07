@@ -13,6 +13,9 @@ included:
   - Packages/AuthFeature
   - Packages/FactionsFeature
   - Packages/ProfileFeature
+  - Packages/Location
+  - Packages/Persistence
+  - Packages/WalkFeature
 excluded:
   - Packages/H3Kit/Sources/CH3     # vendored C
   - "**/.build"

@@ -36,6 +36,13 @@ public enum APIError: Error, Sendable {
     case factionNotFound
     case factionChangeLocked(nextChangeAt: Date)
     case rateLimited(retryAfterS: Int?)
+    // Feature 003 walk codes (specs/003-walk-tracking/data-model.md §2.5).
+    case walkNotFound
+    case walkNotActive
+    case walkOverlap(activeWalkId: String?)
+    case factionRequired
+    case invalidEndedAt
+    case sampleQuotaExceeded(retryAfterS: Int?)
     case validation(message: String)
     case network(underlying: any Error)
     case unexpected(code: String, status: Int)
@@ -59,6 +66,12 @@ public enum APIError: Error, Sendable {
                 self = .unexpected(code: code, status: status)
             }
         case "RATE_LIMITED": self = .rateLimited(retryAfterS: details?["retryAfterS"]?.intValue)
+        case "WALK_NOT_FOUND": self = .walkNotFound
+        case "WALK_NOT_ACTIVE": self = .walkNotActive
+        case "WALK_OVERLAP": self = .walkOverlap(activeWalkId: details?["activeWalkId"]?.stringValue)
+        case "FACTION_REQUIRED": self = .factionRequired
+        case "INVALID_ENDED_AT": self = .invalidEndedAt
+        case "SAMPLE_QUOTA_EXCEEDED": self = .sampleQuotaExceeded(retryAfterS: details?["retryAfterS"]?.intValue)
         case "VALIDATION_FAILED": self = .validation(message: message)
         default: self = .unexpected(code: code, status: status)
         }
@@ -82,6 +95,25 @@ public enum APIError: Error, Sendable {
         }
     }
 
+    /// Seconds the server asked the client to wait (`details.retryAfterS` of a 429), when known.
+    public var retryAfterS: Int? {
+        switch self {
+        case let .rateLimited(seconds), let .sampleQuotaExceeded(seconds): seconds
+        default: nil
+        }
+    }
+
+    /// Whether a later retry can succeed without any change on the client (plan.md 003 Shared Semantics 13):
+    /// transport failures, 5xx, 408 and the 429 family are transient; session-ending 401s are transient too because
+    /// the request is valid again once the player signs in; every other 4xx is permanent.
+    public var isTransient: Bool {
+        switch self {
+        case .network, .rateLimited, .sampleQuotaExceeded: true
+        case let .unexpected(_, status): status >= 500 || status == 408 || status == 0
+        default: endsSession
+        }
+    }
+
     /// The envelope code, when the case came from one.
     public var code: String? {
         switch self {
@@ -95,6 +127,12 @@ public enum APIError: Error, Sendable {
         case .factionNotFound: "FACTION_NOT_FOUND"
         case .factionChangeLocked: "FACTION_CHANGE_LOCKED"
         case .rateLimited: "RATE_LIMITED"
+        case .walkNotFound: "WALK_NOT_FOUND"
+        case .walkNotActive: "WALK_NOT_ACTIVE"
+        case .walkOverlap: "WALK_OVERLAP"
+        case .factionRequired: "FACTION_REQUIRED"
+        case .invalidEndedAt: "INVALID_ENDED_AT"
+        case .sampleQuotaExceeded: "SAMPLE_QUOTA_EXCEEDED"
         case .validation: "VALIDATION_FAILED"
         case .network: nil
         case let .unexpected(code, _): code
@@ -122,6 +160,22 @@ public enum APIError: Error, Sendable {
             } else {
                 "Too many attempts. Try again shortly."
             }
+        case .walkNotFound:
+            "That walk is not available."
+        case .walkNotActive:
+            "This walk has already been finished."
+        case .walkOverlap:
+            "Another walk is still running. Finish it first."
+        case .factionRequired:
+            "Pick a faction before you start walking."
+        case .invalidEndedAt:
+            "The walk's end time is not valid."
+        case let .sampleQuotaExceeded(retryAfterS):
+            if let retryAfterS {
+                "Daily upload limit reached. Uploads resume in \(retryAfterS / 3600 + 1) hours."
+            } else {
+                "Daily upload limit reached. Uploads resume tomorrow."
+            }
         case .validation:
             "Some of the details are not valid."
         case .network:
@@ -137,8 +191,12 @@ extension APIError: Equatable {
         switch (lhs, rhs) {
         case (.unauthorized, .unauthorized), (.tokenExpired, .tokenExpired), (.accountDeleted, .accountDeleted),
              (.appleUnavailable, .appleUnavailable), (.invalidRefreshToken, .invalidRefreshToken),
-             (.refreshReused, .refreshReused), (.factionNotFound, .factionNotFound):
+             (.refreshReused, .refreshReused), (.factionNotFound, .factionNotFound),
+             (.walkNotFound, .walkNotFound), (.walkNotActive, .walkNotActive), (.factionRequired, .factionRequired),
+             (.invalidEndedAt, .invalidEndedAt):
             true
+        case let (.walkOverlap(a), .walkOverlap(b)): a == b
+        case let (.sampleQuotaExceeded(a), .sampleQuotaExceeded(b)): a == b
         case let (.invalidAppleToken(a), .invalidAppleToken(b)): a == b
         case let (.factionChangeLocked(a), .factionChangeLocked(b)): a == b
         case let (.rateLimited(a), .rateLimited(b)): a == b

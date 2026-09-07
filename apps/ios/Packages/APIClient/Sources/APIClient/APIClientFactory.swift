@@ -12,12 +12,21 @@ public struct LiveServices: Sendable {
     public let auth: any AuthService
     public let factions: any FactionsService
     public let profile: any ProfileService
+    /// Feature 003: the five walk endpoints.
+    public let walks: any WalksService
 
-    public init(session: AuthSession, auth: any AuthService, factions: any FactionsService, profile: any ProfileService) {
+    public init(
+        session: AuthSession,
+        auth: any AuthService,
+        factions: any FactionsService,
+        profile: any ProfileService,
+        walks: any WalksService
+    ) {
         self.session = session
         self.auth = auth
         self.factions = factions
         self.profile = profile
+        self.walks = walks
     }
 }
 
@@ -53,7 +62,8 @@ public enum APIClientFactory {
             session: session,
             auth: auth,
             factions: FactionsServiceLive(client: client),
-            profile: ProfileServiceLive(client: client)
+            profile: ProfileServiceLive(client: client),
+            walks: WalksServiceLive(client: client)
         )
     }
 }

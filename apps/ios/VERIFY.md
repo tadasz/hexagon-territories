@@ -1,10 +1,133 @@
 # Verification log — `apps/ios`
 
-Two entries: feature **002-auth-and-factions** (Stream B, this section) and feature **001-repo-foundations** (Stream C,
-kept below for the record). Both were written in a Linux (Ubuntu 24.04) container **without Xcode, XcodeGen or an iOS
-SDK**; the Swift 6.2.1 Linux toolchain (`swift-6.2.1-RELEASE-ubuntu24.04`, downloaded from swift.org into the
-session's scratch directory and put on `PATH` with `export PATH=<toolchain>/usr/bin:$PATH`) built and tested everything
-that does not import SwiftUI, UIKit, AuthenticationServices, Security or MapLibre.
+Three entries: feature **003-walk-tracking** (Stream B, first section), feature **002-auth-and-factions** (Stream B)
+and feature **001-repo-foundations** (Stream C), kept for the record. All were written in a Linux (Ubuntu 24.04)
+container **without Xcode, XcodeGen or an iOS SDK**; the Swift 6.2.1 Linux toolchain
+(`swift-6.2.1-RELEASE-ubuntu24.04`, downloaded from swift.org into the session's scratch directory and put on `PATH`
+with `export PATH=<toolchain>/usr/bin:$PATH`) built and tested everything that does not import SwiftUI, UIKit,
+CoreLocation, CoreMotion, BackgroundTasks, Network, AuthenticationServices, Security or MapLibre.
+
+## Feature 003 — Stream B (2026-09-07)
+
+Toolchain: the 6.2.1 tarball was already present in the session scratch directory from feature 002
+(`swift/swift-6.2.1-RELEASE-ubuntu24.04`); `swift --version` = `Swift version 6.2.1 (swift-6.2.1-RELEASE)`,
+`/usr/include/sqlite3.h` present and `pkg-config --exists sqlite3` true (GRDB links the system SQLite). SwiftPM
+resolved `GRDB.swift` **7.11.1** and `swift-openapi-generator` 1.13.1 through the session proxy.
+
+### Verified here (Linux, Swift 6.2.1)
+
+| What | Command (from `apps/ios/Packages`) | Result |
+|---|---|---|
+| `Core` — walk models (`WalkModels.swift`), `WalksService`, `APIError` walk codes + `isTransient`, `FakeWalksService` in `CoreTestSupport` | `cd Core && swift test -Xswiftc -warnings-as-errors` | **79 tests, 0 failures** (66 from 002 + `WalkModelsCodingTests` 8: the contract's finish example decodes verbatim to `hexCount 5`, `weekId "2026-W37"`, round-trips, nulls, flags, requests encode as the contract expects; `APIErrorWalkCodesTests` 5). |
+| `Location` — `PathRecorder`, `HexMetersEstimator`, `AutoPauseDetector`, `WalkTracker`, `LivePath`; fakes in the `LocationTestSupport` product | `cd Location && swift test -Xswiftc -warnings-as-errors` | **28 tests, 0 failures.** `PathRecorderTests` 5: all six `walk-paths.json` cases fed as fixes with the throttle disabled give exactly the fixture's `acceptedSeqs` and `rejected` (SC-002 filter parity); 1 Hz at 1 m/s keeps one fix per 5 s; a 12 m jump within 2 s is kept. `HexMetersEstimatorTests` 4: incremental estimate vs one batch `pathToHexMeters(rawAccepted)` — **max deviation 0.0 m** over all six cases; `teleport` equals the fixture within 0.5 m; `loop-inside-one-cell` → one cell, `edge-hugging` → the fixture's two cells (see the R19 note below for `straight-line`/`car-speed`). `AutoPauseDetectorTests` 6: pause at 180 s, jitter < 10 m never counts, 10 m every minute never pauses, resume on the first move, moving time excludes the pause. `WalkTrackerTests` 13: start → recording + `create` in the store; the `noisy-zigzag` fixture streamed → the store holds exactly its accepted and rejected seqs; throttle on streamed fixes; stationary 3 min → paused → move → recording; 6 h → finished once (asserted on the state stream) with `endedAt = now` and pedometer steps; stop; `notAuthorized` → failed and no walk; source error mid-walk → finished with what was recorded; streamed fixes consumed; store failure keeps the walk running with a warning; recovery (with and without samples; never while active). |
+| `Persistence` — GRDB 7.11.1 schema `v1-walks`, `GRDBWalkRepository`, `OutboxQueue`, `Backoff`, `SyncCoordinator` | `cd Persistence && swift test -Xswiftc -warnings-as-errors` | **31 tests, 0 failures.** `WalkRepositoryTests` 7 (migration creates the four tables; create/append/progress/finish round-trips; path rebuilt from samples; recovery with progress, counts and points; history ordering newest first + `unsyncedWalks`; server path adopted only when the local one is empty; append queues a batch at 200). `VacuumTests` 1 (samples of synced walks older than 7 days deleted, paths and other walks kept, idempotent). `OutboxQueueTests` 6 (FIFO per walk interleaved by id; a backing-off head never blocks another walk; 451 samples → batches 200/200/51 without gaps or duplicates, pedometer window on the last; `onlyFullBatches`; `dropWalk`; payload is the wire body). `BackoffTests` 2 (`2, 4, 8 … 256, 300`; ±20 % jitter, seeded). `SyncCoordinatorTests` 15 (create → samples → finish in order with the server id; no pedometer when unavailable; network error → retried once after ≈ 2 s ± 20 %, no duplicate; 5xx back-off grows; 429 waits exactly `retryAfterS`; quota with `retryAfterS 1` waits 5 s; `WALK_OVERLAP` → walk failed, its items dropped, the next walk fully delivered; `WALK_NOT_ACTIVE` on samples → rest dropped, walk refreshed with `GET` and adopted; refresh failure → failed; a 401 halts the drain without dropping; orphan items dropped; **SC-004**: a drain cancelled mid-batch resumes with exactly one `create`, the batch re-sent once, one `finish`; concurrent drains coalesce; `flushSamples` queues only new samples; the 60 s recording timer). |
+| `WalkFeature` — `WalkViewModel`, `WalkHistoryViewModel`, `WalkSummaryPresentation`, `WalkRow`, `MiniPathGeometry` (the SwiftUI views sit behind `#if canImport(SwiftUI)`) | `cd WalkFeature && swift test -Xswiftc -warnings-as-errors` | **24 tests, 0 failures.** `WalkViewModelTests` 12 with the real GRDB in-memory repository, `SyncCoordinator` and `WalkTracker` and fakes at the edges: start creates the outbox `create` item and records (permission not asked twice); the HUD follows accepted fixes; stop queues `samples` + `finish`, shows the provisional summary (XP pending, 3 uploads pending) and the server summary replaces it after the drain (26 XP, counted metres, leader); a permanent failure is shown on the summary; denied permission → Settings prompt, no walk, source never started; not determined → asked once; no faction → refused before the permission prompt; source failure reported; auto-pause/resume mirrored in the phase; 6 h auto-end → summary with a notice; lost location source → walk saved with a notice; `recoverIfNeeded` queues the finish of an interrupted walk with `endedAt` = last kept sample. `WalkHistoryViewModelTests` 5 (20/5 paging with `nextCursor`, local pending/recording walks merged on top and not repeated, server failure keeps local rows, status lines, detail from the server and `WALK_NOT_FOUND` → "not available"). `MiniPathGeometryTests` 3, `WalkSummaryPresentationTests` 4. |
+| `APIClient` — **the generator ran on Linux** from the temporary `openapi.json` (see below): `WalksServiceLive`, `WalksMapping`, `walks` in `LiveServices`, `retry-after` → `sampleQuotaExceeded` | `cd APIClient && swift test` | **21 tests, 0 failures** (13 from 002 + `WalksServiceLiveTests` 8 with a stubbed `ClientTransport`: 201 and 200 both map to `WalkCreated`, bearer header and body; `WALK_OVERLAP` → `.walkOverlap(activeWalkId:)`; `FACTION_REQUIRED`, `WALK_NOT_FOUND`; batch result mapping, 429 `SAMPLE_QUOTA_EXCEEDED` with the `retry-after` header → `retryAfterS 3600`, `WALK_NOT_ACTIVE`; the contract's finish example decodes through the generated types; flagged and active summaries; `listWalks` passes `cursor` and `limit`; transport failure → `.network`). The generated code emits the generator's own `public import` warnings, so `-warnings-as-errors` is not used for this package (as in 002). |
+| Regression | `H3Kit` 21, `TerritoryRules` 29, `AuthFeature` 6, `FactionsFeature` 9, `ProfileFeature` 13, `DesignSystem` 1 | all **0 failures** (re-run after the `Core` change). |
+| No UI frameworks in the Linux packages | `grep -rl 'import UIKit\|import SwiftUI\|import CoreLocation\|import CoreMotion' Packages/Location/Sources Packages/Persistence/Sources \| grep -v /Platform/` | no output. |
+| SwiftUI / platform / app sources | `swiftc -parse -swift-version 6` on every file in `NatureExplorer/`, `Tests/NatureExplorerTests/`, `Packages/WalkFeature/Sources/WalkFeature/*.swift`, `Packages/Location/Sources/Location/Platform/*.swift` | all parse. **Type-checking of the SwiftUI, CoreLocation, CoreMotion, BackgroundTasks and Network code is not possible without the Apple SDKs.** |
+| `project.yml` / `Info.plist` | `yq`-equivalent parse; every `packages[].path`, `sources[].path`, `INFOPLIST_FILE`, `CODE_SIGN_ENTITLEMENTS` exists; `plistlib` check of quickstart B.3 | packages include `Location`, `Persistence`, `WalkFeature`; plist prints `['location'] True True` and `BGTaskSchedulerPermittedIdentifiers = ['com.natureexplorer.app.sync']`; no `NSLocationAlways…` key. **`xcodegen generate` itself not run.** |
+| Style | `swiftlint` / `swiftformat` not installed here; checked by hand: no tabs, no trailing whitespace, `.swiftlint.yml` includes the three new packages | OK (a few doc-comment and test-string lines exceed 130 characters; `ignores_comments` covers the former). |
+
+### R19 note — estimator vs fixture for `straight-line` and `car-speed`
+
+`tasks.md` T016 expects the incremental estimate to equal the fixture's `hexMeters` within 0.5 m for `straight-line`,
+`teleport` and `car-speed` because their simplified path has two points. That holds for `teleport` (no jitter). The
+raw samples of `straight-line` carry sub-tolerance jitter (raw length 1 207.6 m vs simplified 1 197.0 m, max cell
+deviation 4.8 m) and `car-speed`'s 40 short segments locate the crossings slightly differently than one long segment
+(max cell deviation 0.96 m). The device estimate runs over the *raw* accepted path by design (research.md R19, the HUD
+says "estimate"), so `HexMetersEstimatorTests` asserts identical cells, conservation of metres, ±0.5 m for `teleport`
+and ±1 % of the walk length for the other two, and prints the deviations. The SC-002 statement ("within 0.5 m of the
+mirrored rules package's batch computation over the same accepted samples") is met exactly (0.0 m).
+
+### Temporary OpenAPI document (T021) — and a contract finding for Streams A/C
+
+`Packages/APIClient/Sources/APIClient/openapi.json` is **not** the committed snapshot: it is the 002 snapshot merged
+with `specs/003-walk-tracking/contracts/openapi.yaml` (paths, tag, schemas, parameters, responses), marked
+`info.x-source = TEMPORARY …`, with one deliberate shape change — `WalkSummary.path` is written as an inline nullable
+object (`type: [object, null]` with `LineString`'s properties). Stream A's refreshed snapshot (T012) landed while this
+stream ran and was tried through the generator (`./scripts/sync-openapi.sh && swift build`):
+
+- the snapshot has the five `/v1/walks*` operations, and every other walk schema generates and maps cleanly;
+- its `WalkSummary.path` is `oneOf: [{$ref LineString}, {type: "null"}]` (the contract's shape). swift-openapi-generator
+  1.13.1 answers `warning: Schema "null" is not supported, reason: "schema type", skipping [… WalkSummary/path]` and
+  **generates `WalkSummary` without a `path` property**; the same happens with `anyOf`. Because the schema has
+  `additionalProperties: false`, the generated decoder (`ensureNoAdditionalProperties(knownKeys:)`) would then reject
+  every real finish/detail response that carries `path`. So the snapshot as committed cannot back the iOS client.
+
+**Recommendation (Stream A / Stream C T027)**: express `path` in the TypeBox schema so the OpenAPI output is either
+`type: ["object", "null"]` with the `LineString` properties inline (verified here: generates
+`WalkSummary.PathPayload?`, mapped by `WalksMapping.swift`), or a plain `$ref` to `LineString` that is *not* in
+`required` (the generator makes it `Components.Schemas.LineString?` and decodes JSON `null` as absent — not verified
+here; check that Fastify's response serializer still emits `null` for it). Then run
+`pnpm --filter @nature/api-schema snapshot && apps/ios/scripts/sync-openapi.sh`, rebuild `APIClient`, and adjust the
+one `PathPayload` extension in `WalksMapping.swift` to the generated name. The `@nature/api-schema` equality test will
+fail until the committed snapshot and the iOS copy are the same file again — expected, and the reason the iOS copy is
+marked TEMPORARY.
+
+### Not verified here — run on macOS (Xcode 16 / Swift 6) or Xcode Cloud
+
+```bash
+cd apps/ios
+./scripts/sync-openapi.sh                          # after Stream A's snapshot landed (replaces the TEMPORARY document)
+for p in Core Location Persistence WalkFeature APIClient; do (cd Packages/$p && swift test) || exit 1; done   # should reproduce the Linux counts
+brew install xcodegen shellcheck swiftlint swiftformat
+swiftlint && swiftformat --lint .
+xcodegen generate                                  # expect no "missing file" warnings; Location/Persistence/WalkFeature linked
+xcodebuild test -scheme NatureExplorer -destination 'platform=iOS Simulator,name=iPhone 16' | tail -5
+#   ** TEST SUCCEEDED ** — AppContainerTests 5, RootGateTests 8, ZoomBridgeTests 2, WalkWiringTests 5
+# Simulator flows (specs/003-walk-tracking/quickstart.md B.4), against the API from quickstart A with a signed-in tester:
+#   Features > Location > City Run: Walk tab → Start → HUD counts, hex changes, Stop → summary sheet with the server numbers
+#   Features > Location > Freeway Drive → Stop → "This walk was flagged (…)" banner, 0 XP
+#   Airplane mode: Start → Stop → "Pending upload"; airplane mode off → the sheet/history row updates to the server summary
+#   GPX replay: Xcode > Debug > Simulate Location with a GPX from packages/walk-sim/samples (Stream A) once it exists
+#   Kill the app mid-walk → relaunch → "A walk that was interrupted has been saved and will be uploaded."
+# Device (iPhone 13): 1-hour walk with the screen off, background location indicator visible, Settings > Battery < 6 %
+#   (SC-006, owner action; xctrace Energy Log attached to the verification log)
+git add apps/ios/Packages/Persistence/Package.resolved apps/ios/Packages/WalkFeature/Package.resolved   # freeze GRDB 7.11.x (Stream C)
+```
+
+Things a macOS run may surface that could not be checked here:
+
+- **`CoreLocationSource`**: `CLLocationUpdate.liveUpdates(.fitness)` (iOS 17 API) inside an `AsyncThrowingStream`,
+  `CLBackgroundActivitySession()` held from `start()` to `stop()`, `LocationFix(CLLocation, isStationary:)` mapping of
+  negative (invalid) accuracies/speed/course. iOS 18's `CLLocationUpdate.authorizationDenied` etc. are deliberately not
+  used (iOS 17 deployment target); a revoked permission ends the sequence with an error, which the tracker turns into
+  `WalkFinishInput.Reason.sourceLost`.
+- **`CoreLocationPermission`**: `CLLocationManagerDelegate` under strict concurrency (`@unchecked Sendable`,
+  `locationManagerDidChangeAuthorization` resuming stored continuations); `requestWhenInUseAuthorization` only, never
+  Always (Constitution VII).
+- **`PedometerBridge`**: `CMPedometer.queryPedometerData(from:to:)` wrapped in a continuation; `nil` in the simulator.
+- **`SyncKicks`**: `BGTaskScheduler.shared.register` is called from `NatureExplorerApp.init` (must precede launch
+  completion); `BGAppRefreshTaskRequest` submission; `NWPathMonitor` on a private queue calling into the actor.
+- **SwiftUI**: `WalkScreen`'s sheet binding over an `@Observable` phase; `NavigationLink(value:)` +
+  `navigationDestination(for: String.self)` in `WalkHistoryList`; `Canvas` in `MiniPathView`; `Link` to
+  `UIApplication.openSettingsURLString` in `PermissionView`; `LabeledContent`; `Text(date, format:)`.
+- **`WalkTabRoute`** owns the `WalkViewModel` as `@State`; the tracker/live path live in `AppContainer`, so a running
+  walk survives tab switches, but a re-created route re-subscribes to the tracker's single-consumer state stream —
+  if the simulator flow shows a stale phase after switching tabs, hoist the view model into the container.
+- **XcodeGen**: `LocationTestSupport` is a second product of the `Location` package declared with
+  `package: Location` + `product: LocationTestSupport` on the test target; GRDB is an SPM dependency of `Persistence`
+  only (the app target imports `Persistence`, never `GRDB`).
+
+### Notes for Stream C
+
+- `.gitignore`: `apps/ios/Packages/*/.build/` already covers `Location`, `Persistence`, `WalkFeature`; the `.build`
+  directories and the Linux-generated `Package.resolved` files (`Persistence`, `WalkFeature`, `APIClient`) were deleted
+  before hand-off. Commit `Package.resolved` after the first macOS resolution (GRDB 7.11.1 resolved here).
+- `docs/licences.md`: GRDB (MIT) already has a row from 001; nothing new ships in the binary.
+- Snapshot sync (T027): see "Temporary OpenAPI document" above — the committed snapshot's `WalkSummary.path` shape
+  must change before the iOS client can be generated from it.
+- `quickstart.md` B.1–B.3 ran clean (this table is the log); B.4 and SC-006 are macOS/device items for the owner.
+- Deviations from `tasks.md`: fakes live in `Location/Sources/LocationTestSupport` (a library product, like
+  `CoreTestSupport`) instead of `Tests/LocationTests/Fakes/`, so `WalkFeature` and the app tests reuse them;
+  `LocationSource.updates()` returns an `AsyncThrowingStream` (a revoked permission must end the walk, and a plain
+  `AsyncStream` cannot carry the error); the tracker exposes `ingest(_:)` so tests feed fixes deterministically;
+  `WalkStore.updateProgress` carries the numbers and estimates while the path itself is rebuilt from the stored
+  samples (no per-sample rewrite of the `walk_path` blob); `SyncCoordinator` takes `autoKick: false` in tests;
+  `AppContainer` gains `WalkDependencies` (an in-memory graph by default so the 002 tests still construct it) and
+  `resumeWalks()`; `MiniPathGeometry` tests run on Linux inside `WalkFeature` (the package builds on Linux because
+  every SwiftUI file is guarded).
 
 ## Feature 002 — Stream B (2026-09-07)
 

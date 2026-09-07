@@ -133,4 +133,52 @@ public enum Fixtures {
             error: error
         )
     }
+
+    // MARK: Feature 003 walks
+
+    /// The finish example of `specs/003-walk-tracking/contracts/openapi.yaml` (one cell, 2 611.4 m, 26 XP), keyed by
+    /// the given ids. `hexes` can be replaced to model more cells.
+    public static func walkSummary(
+        walkId: String = "2f9b7c1e-1b2c-4d3e-9f0a-1a2b3c4d5e6f",
+        clientWalkId: String = "6d1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b",
+        status: WalkStatus = .finished,
+        finishReason: FinishReason? = .client,
+        startedAt: Date = Fixtures.now.addingTimeInterval(-2 * 3600),
+        endedAt: Date? = Fixtures.now.addingTimeInterval(-2 * 3600 + 2110),
+        distanceM: Double = 2611.4,
+        durationS: Int = 2110,
+        xp: Int = 26,
+        flags: [WalkFlag] = [],
+        hexes: [WalkHex]? = nil
+    ) -> WalkSummary {
+        let flagged = !flags.isEmpty
+        let cells = hexes ?? [
+            WalkHex(
+                h3: "891f40d1a4fffff",
+                meters: 812.3,
+                cappedMeters: flagged ? 0 : 812.3,
+                weekStanding: WeekStanding(leader: 1, myFactionShare: 0.64, owner: nil)
+            ),
+        ]
+        return WalkSummary(
+            walkId: walkId,
+            clientWalkId: clientWalkId,
+            status: flagged ? .flagged : status,
+            finishReason: finishReason,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            finishedAt: endedAt?.addingTimeInterval(2),
+            weekId: "2026-W37",
+            distanceM: distanceM,
+            durationS: durationS,
+            steps: 3400,
+            sampleCount: 422,
+            hexCount: cells.count,
+            xp: flagged ? 0 : xp,
+            scored: !flagged,
+            flags: flags,
+            hexes: cells,
+            path: LineString(coordinates: [[23.9320, 54.9035], [23.9331, 54.9041]])
+        )
+    }
 }

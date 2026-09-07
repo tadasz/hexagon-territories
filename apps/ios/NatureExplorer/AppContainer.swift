@@ -2,8 +2,10 @@ import APIClient
 import AuthFeature
 import Core
 import Foundation
+import Location
 import MapFeature
 import Observation
+import Persistence
 
 /// Dependency container: the single place that builds concrete services and hands them to features as protocol-typed
 /// values (`docs/architecture.md` §4). Feature 002 adds the session (`AuthSession` over the Keychain), the generated
@@ -19,6 +21,8 @@ final class AppContainer {
     let authService: any AuthService
     let factionsService: any FactionsService
     let profileService: any ProfileService
+    /// Feature 003: walks (service, local store, outbox/sync, tracker, live path).
+    let walks: WalkDependencies
 
     /// Mirror of `AuthSession.state`, fed by `authStateChanges`.
     private(set) var sessionState: AuthState = .signedOut
@@ -37,6 +41,7 @@ final class AppContainer {
         auth: any AuthService,
         factions: any FactionsService,
         profile: any ProfileService,
+        walks: WalkDependencies? = nil,
         mapConfig: MapConfig = MapConfig.fromBundle(),
         profileCache: ProfileCache = .inMemory()
     ) {
@@ -44,6 +49,7 @@ final class AppContainer {
         authService = auth
         factionsService = factions
         profileService = profile
+        self.walks = walks ?? WalkDependencies.inMemory(walksService: OfflineWalksService())
         self.mapConfig = mapConfig
         self.profileCache = profileCache
     }
@@ -56,8 +62,19 @@ final class AppContainer {
             auth: services.auth,
             factions: services.factions,
             profile: services.profile,
+            walks: WalkDependencies.live(walksService: services.walks),
             profileCache: .userDefaults()
         )
+    }
+
+    /// Launch / foreground housekeeping for walks (FR-004, FR-015): finish a walk left recording by a kill (its
+    /// finish goes to the outbox), delete raw samples older than 7 days, drain the outbox.
+    func resumeWalks() async {
+        if let recovered = try? await walks.tracker.recover() {
+            try? await walks.sync.walkFinished(recovered)
+        }
+        try? walks.repository.vacuum(now: Date())
+        await walks.sync.kick()
     }
 
     /// What `RootView` shows (research.md R12).

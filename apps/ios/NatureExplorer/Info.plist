@@ -34,6 +34,18 @@
 	</dict>
 	<key>MAP_STYLE_URL</key>
 	<string>https://tiles.openfreemap.org/styles/liberty</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nature Explorer records your path while a walk is running so the metres you walk count for your faction's hexagons. Location is used only during a walk you started. TODO(owner): final copy.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Step counts help confirm that a walk was made on foot. TODO(owner): final copy.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.natureexplorer.app.sync</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

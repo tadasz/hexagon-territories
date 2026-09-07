@@ -5,6 +5,7 @@ import FactionsFeature
 import MapFeature
 import ProfileFeature
 import SwiftUI
+import WalkFeature
 
 /// Gate + six-tab shell (research.md R12; `docs/architecture.md` §4): signed out → `SignInView`; signed in without
 /// a faction → `FactionPickView`; otherwise Map · Walk · Capture · Collection · Factions · Profile.
@@ -39,6 +40,11 @@ struct RootView: View {
         .accessibilityIdentifier("root.tabs")
     }
 
+    /// Which tabs host a feature screen rather than a placeholder (checked by the app-target tests).
+    static func hostsWalkFeature(for tab: AppTab) -> Bool {
+        tab == .walk
+    }
+
     @ViewBuilder
     private func screen(for tab: AppTab) -> some View {
         switch tab {
@@ -48,7 +54,9 @@ struct RootView: View {
             FactionsTabRoute(container: container)
         case .profile:
             ProfileTabRoute(container: container)
-        case .walk, .capture, .collection:
+        case .walk:
+            WalkTabRoute(container: container)
+        case .capture, .collection:
             PlaceholderScreen(title: tab.title, systemImage: tab.systemImage)
         }
     }
@@ -119,6 +127,37 @@ private struct FactionsTabRoute: View {
 
     var body: some View {
         FactionsScreen(viewModel: viewModel)
+    }
+}
+
+/// The Walk tab (feature 003): the recording screen with a link to the history. The view model lives here as
+/// `@State` so a running walk survives tab switches; the tracker itself lives in the container.
+private struct WalkTabRoute: View {
+    @State private var viewModel: WalkViewModel
+    private let container: AppContainer
+
+    init(container: AppContainer) {
+        self.container = container
+        _viewModel = State(initialValue: WalkViewModel(
+            tracker: container.walks.tracker,
+            livePath: container.walks.livePath,
+            sync: container.walks.sync,
+            permission: container.walks.permission,
+            hasFaction: { container.me?.hasFaction ?? false },
+            deviceInfo: DeviceInfo.current(),
+            storeIsDurable: container.walks.storeIsDurable
+        ))
+    }
+
+    var body: some View {
+        NavigationStack {
+            WalkScreen(viewModel: viewModel) {
+                WalkHistoryList(viewModel: WalkHistoryViewModel(
+                    service: container.walks.walksService,
+                    repository: container.walks.repository
+                ))
+            }
+        }
     }
 }
 

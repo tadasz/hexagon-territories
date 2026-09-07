@@ -34,8 +34,12 @@ public struct ErrorEnvelopeMiddleware: ClientMiddleware {
         }
         if let envelope = try? JSONCoding.decoder().decode(ErrorEnvelope.self, from: data) {
             var error = APIError(envelope: envelope, status: status)
-            if case .rateLimited(nil) = error, let retryAfter, let seconds = Int(retryAfter) {
-                error = .rateLimited(retryAfterS: seconds)
+            if let retryAfter, let seconds = Int(retryAfter) {
+                switch error {
+                case .rateLimited(nil): error = .rateLimited(retryAfterS: seconds)
+                case .sampleQuotaExceeded(nil): error = .sampleQuotaExceeded(retryAfterS: seconds)
+                default: break
+                }
             }
             return error
         }

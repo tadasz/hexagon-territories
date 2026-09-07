@@ -59,6 +59,13 @@ packages:
     path: Packages/FactionsFeature
   ProfileFeature:
     path: Packages/ProfileFeature
+  # Feature 003 (research.md R16–R18): walk recording core, GRDB persistence + outbox, the Walk tab.
+  Location:
+    path: Packages/Location
+  Persistence:
+    path: Packages/Persistence
+  WalkFeature:
+    path: Packages/WalkFeature
 
 targets:
   NatureExplorer:
@@ -84,11 +91,16 @@ targets:
       - package: AuthFeature
       - package: FactionsFeature
       - package: ProfileFeature
+      - package: Location
+      - package: Persistence
+      - package: WalkFeature
     settings:
       base:
         # Final bundle identifier (owner confirmed 2026-09-07).
         PRODUCT_BUNDLE_IDENTIFIER: com.natureexplorer.app
         PRODUCT_NAME: NatureExplorer
+        # Background location while a walk runs (feature 003): UIBackgroundModes = [location] in Info.plist, plus the
+        # When-In-Use and Motion usage descriptions and the BGTaskScheduler identifier com.natureexplorer.app.sync.
         INFOPLIST_FILE: NatureExplorer/Info.plist
         # Sign in with Apple (feature 002, research.md R13); the App ID needs the capability too (owner action).
         CODE_SIGN_ENTITLEMENTS: NatureExplorer/NatureExplorer.entitlements
@@ -118,6 +130,11 @@ targets:
       - package: Core
       - package: Core
         product: CoreTestSupport
+      - package: Location
+      - package: Location
+        product: LocationTestSupport
+      - package: Persistence
+      - package: WalkFeature
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.natureexplorer.app.tests
