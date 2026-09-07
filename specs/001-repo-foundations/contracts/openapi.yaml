@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: Nature Explorer API
+  version: 0.1.0
+  description: |
+    Fragment for feature 001-repo-foundations. Only the operational endpoints exist in this
+    feature; every later feature adds its own fragment under specs/NNN-name/contracts/ and the
+    running API serves the merged document at GET /openapi.json (generated from TypeBox schemas
+    by @fastify/swagger). The Error schema and the `requestId` convention defined here are shared
+    by every future route.
+servers:
+  - url: http://localhost:3000
+    description: Local development (make dev)
+tags:
+  - name: ops
+    description: Health and introspection
+
+paths:
+  /health:
+    get:
+      tags: [ops]
+      operationId: getHealth
+      summary: Liveness and database readiness
+      description: |
+        Runs `SELECT 1` against Postgres with a 2 s timeout. Returns 200 when the database answers,
+        503 with `db: "error"` otherwise. Never requires authentication. Not versioned under /v1
+        because load balancers and Compose healthchecks call it.
+      responses:
+        "200":
+          description: API and database are reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                db: ok
+                version: 0.1.0
+        "503":
+          description: API is up but the database is not reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: degraded
+                db: error
+                version: 0.1.0
+
+  /openapi.json:
+    get:
+      tags: [ops]
+      operationId: getOpenApiDocument
+      summary: The OpenAPI 3.1 document describing this server
+      description: |
+        Generated at startup from the registered routes' TypeBox schemas. Must contain the
+        `/health` path and the `Error` component schema (spec acceptance scenario US2-2).
+      responses:
+        "200":
+          description: OpenAPI 3.1 document
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [openapi, info, paths, components]
+                properties:
+                  openapi:
+                    type: string
+                    pattern: "^3\\.1\\.\\d+$"
+                  info:
+                    type: object
+                  paths:
+                    type: object
+                  components:
+                    type: object
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, db, version]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: ok when every dependency check passed
+        db:
+          type: string
+          enum: [ok, error]
+          description: Result of `SELECT 1` against Postgres
+        version:
+          type: string
+          description: API package version (from apps/api/package.json)
+
+    Error:
+      type: object
+      description: |
+        Shared error envelope returned by every non-2xx response of every route (installed by the
+        error-handler plugin). `code` is a stable machine-readable identifier in SCREAMING_SNAKE_CASE;
+        `message` is for developers, never shown verbatim to players; `details` carries
+        validation issues or other structured context.
+      required: [error, requestId]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]+$"
+              examples: [VALIDATION_FAILED, NOT_FOUND, INTERNAL_ERROR, DB_UNAVAILABLE]
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        requestId:
+          type: string
+          description: Fastify request id, also returned in the `x-request-id` response header
+
+  responses:
+    BadRequest:
+      description: Request validation failed (code VALIDATION_FAILED)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Unknown route or resource (code NOT_FOUND)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unhandled error (code INTERNAL_ERROR); the message is generic in production
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
