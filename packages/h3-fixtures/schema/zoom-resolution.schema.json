@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "$id": "zoom-resolution",
+  "title": "zoom-resolution fixture",
+  "type": "object",
+  "required": ["name", "description", "generator", "version", "seed", "cases"],
+  "properties": {
+    "name": {
+      "description": "equals the file name without .json",
+      "const": "zoom-resolution",
+      "type": "string"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "generator": {
+      "pattern": "^scripts/generate\\.ts#[A-Za-z]+$",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "description": "bump when the shape (not the values) changes",
+      "type": "integer"
+    },
+    "seed": {
+      "description": "PRNG seed used by the generator",
+      "type": "integer"
+    },
+    "cases": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "input", "expected"],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "unique within the file; used in test names",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["zoom"],
+            "properties": {
+              "zoom": {
+                "description": "finite number",
+                "type": "number"
+              }
+            }
+          },
+          "expected": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["resolution"],
+            "properties": {
+              "resolution": {
+                "minimum": 0,
+                "maximum": 15,
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

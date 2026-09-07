@@ -1,0 +1,216 @@
+{
+  "name": "zoom-resolution",
+  "description": "Map zoom → H3 resolution, the prototype's zoomToResolution table (z ≥ 16 → 9, 14–15 → 8, 12–13 → 7, 10–11 → 6, 8–9 → 5, 6–7 → 4, 4–5 → 3, 2–3 → 2, 0–1 → 1) for z = 0…18 plus four edge cases: zoom -1 → 1, 18.7 → 9, 20 → 9, 13.4 → 7 (non-integers are floored).",
+  "generator": "scripts/generate.ts#zoomResolutionCases",
+  "version": 1,
+  "seed": 20260907,
+  "cases": [
+    {
+      "id": "z0",
+      "input": {
+        "zoom": 0
+      },
+      "expected": {
+        "resolution": 1
+      }
+    },
+    {
+      "id": "z1",
+      "input": {
+        "zoom": 1
+      },
+      "expected": {
+        "resolution": 1
+      }
+    },
+    {
+      "id": "z2",
+      "input": {
+        "zoom": 2
+      },
+      "expected": {
+        "resolution": 2
+      }
+    },
+    {
+      "id": "z3",
+      "input": {
+        "zoom": 3
+      },
+      "expected": {
+        "resolution": 2
+      }
+    },
+    {
+      "id": "z4",
+      "input": {
+        "zoom": 4
+      },
+      "expected": {
+        "resolution": 3
+      }
+    },
+    {
+      "id": "z5",
+      "input": {
+        "zoom": 5
+      },
+      "expected": {
+        "resolution": 3
+      }
+    },
+    {
+      "id": "z6",
+      "input": {
+        "zoom": 6
+      },
+      "expected": {
+        "resolution": 4
+      }
+    },
+    {
+      "id": "z7",
+      "input": {
+        "zoom": 7
+      },
+      "expected": {
+        "resolution": 4
+      }
+    },
+    {
+      "id": "z8",
+      "input": {
+        "zoom": 8
+      },
+      "expected": {
+        "resolution": 5
+      }
+    },
+    {
+      "id": "z9",
+      "input": {
+        "zoom": 9
+      },
+      "expected": {
+        "resolution": 5
+      }
+    },
+    {
+      "id": "z10",
+      "input": {
+        "zoom": 10
+      },
+      "expected": {
+        "resolution": 6
+      }
+    },
+    {
+      "id": "z11",
+      "input": {
+        "zoom": 11
+      },
+      "expected": {
+        "resolution": 6
+      }
+    },
+    {
+      "id": "z12",
+      "input": {
+        "zoom": 12
+      },
+      "expected": {
+        "resolution": 7
+      }
+    },
+    {
+      "id": "z13",
+      "input": {
+        "zoom": 13
+      },
+      "expected": {
+        "resolution": 7
+      }
+    },
+    {
+      "id": "z14",
+      "input": {
+        "zoom": 14
+      },
+      "expected": {
+        "resolution": 8
+      }
+    },
+    {
+      "id": "z15",
+      "input": {
+        "zoom": 15
+      },
+      "expected": {
+        "resolution": 8
+      }
+    },
+    {
+      "id": "z16",
+      "input": {
+        "zoom": 16
+      },
+      "expected": {
+        "resolution": 9
+      }
+    },
+    {
+      "id": "z17",
+      "input": {
+        "zoom": 17
+      },
+      "expected": {
+        "resolution": 9
+      }
+    },
+    {
+      "id": "z18",
+      "input": {
+        "zoom": 18
+      },
+      "expected": {
+        "resolution": 9
+      }
+    },
+    {
+      "id": "z-1",
+      "input": {
+        "zoom": -1
+      },
+      "expected": {
+        "resolution": 1
+      }
+    },
+    {
+      "id": "z18.7",
+      "input": {
+        "zoom": 18.7
+      },
+      "expected": {
+        "resolution": 9
+      }
+    },
+    {
+      "id": "z20",
+      "input": {
+        "zoom": 20
+      },
+      "expected": {
+        "resolution": 9
+      }
+    },
+    {
+      "id": "z13.4",
+      "input": {
+        "zoom": 13.4
+      },
+      "expected": {
+        "resolution": 7
+      }
+    }
+  ]
+}

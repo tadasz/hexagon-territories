@@ -1,0 +1,1318 @@
+{
+  "name": "reckoning-weeks",
+  "description": "Three ISO weeks (UTC) of contributions for ten res-9 cells around Kaunas town hall, one per row of the ownership table in docs/territory-rules.md plus cap/bonus, decay-to-unclaimed, bonus-only and the incumbent-below-min gap: no-faction-reaches-min, first-claim, challenger-beats-hysteresis, hysteresis-holds, incumbent-decays-below-min-no-challenger, exact-tie-incumbent-keeps, exact-tie-no-incumbent, cap-and-bonus, incumbent-below-min-challenger-above-min, bonus-only. Week N+1 initial state is week N expected. parentCases cover deriveParentOwner (plurality > 40 % of ≥ 2 claimed children, ties unclaimed).",
+  "generator": "scripts/generate.ts#reckoningWeeks",
+  "version": 1,
+  "seed": 20260907,
+  "factions": [1, 2, 3],
+  "weeks": ["2026-W35", "2026-W36", "2026-W37"],
+  "cells": [
+    {
+      "id": "no-faction-reaches-min",
+      "description": "Table row \"No faction reaches MIN_STRENGTH (500 m) → unclaimed\": 300/400 m in W35, decaying and topping up below 500 in W36–W37; never claimed.",
+      "cell": "891f40da913ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 300
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 400
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 300
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 400
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 300
+              },
+              {
+                "factionId": 2,
+                "strength": 400
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 100
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 100
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 250
+              },
+              {
+                "factionId": 2,
+                "strength": 200
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 250
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 250
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 125
+              },
+              {
+                "factionId": 2,
+                "strength": 350
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "first-claim",
+      "description": "Table row \"No incumbent, one faction ≥ 500 m → that faction\": 800 m claims in W35 (event null→1), then the incumbent keeps with 600 and 700 m of strength.",
+      "cell": "891f40da983ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 800
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 800
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 800
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 200
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 200
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 600
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": "u1"
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 400
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 400
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 700
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": "u1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "challenger-beats-hysteresis",
+      "description": "Table row \"Challenger strength′ ≥ incumbent × 1.10 → challenger takes the cell\": faction 2 reaches 700 vs 600 (≥ 660) in W36 and flips it; faction 1 flips it back in W37 with 500 vs 350 (≥ 385).",
+      "cell": "891f40da987ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 1000
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 1000
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 1000
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 100
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 700
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 100
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 700
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 600
+              },
+              {
+                "factionId": 2,
+                "strength": 700
+              }
+            ],
+            "owner": 2,
+            "flipped": true,
+            "captain": "u2",
+            "event": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 200
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 200
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 500
+              },
+              {
+                "factionId": 2,
+                "strength": 350
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": 2,
+              "to": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "hysteresis-holds",
+      "description": "Table row \"Incumbent still ≥ 500 m and no challenger clears hysteresis → incumbent keeps\": W35 as in data-model.md §1.5 (2 600 m capped to 2 000 + 300, bonus 300 for faction 2); in W36 faction 2 reaches exactly 1 312.5 = 1.05 × 1 250 and leads on strength but does not flip; W37 decays both (656.25 vs 625) and still holds.",
+      "cell": "891f40da98bffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 2600
+            },
+            {
+              "factionId": 1,
+              "userId": "u2",
+              "meters": 300
+            }
+          ],
+          "bonuses": [
+            {
+              "factionId": 2,
+              "userId": "u3",
+              "meters": 300
+            }
+          ],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 2000
+              },
+              {
+                "factionId": 1,
+                "userId": "u2",
+                "cappedMeters": 300
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 2300
+              },
+              {
+                "factionId": 2,
+                "strength": 300
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 100
+            },
+            {
+              "factionId": 2,
+              "userId": "u3",
+              "meters": 1162.5
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 100
+              },
+              {
+                "factionId": 2,
+                "userId": "u3",
+                "cappedMeters": 1162.5
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 1250
+              },
+              {
+                "factionId": 2,
+                "strength": 1312.5
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": "u1"
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [],
+          "bonuses": [],
+          "expected": {
+            "capped": [],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 625
+              },
+              {
+                "factionId": 2,
+                "strength": 656.25
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "incumbent-decays-below-min-no-challenger",
+      "description": "Table row \"Incumbent below 500 m and no challenger ≥ 500 m → unclaimed\": 900 m claims in W35, decays to 450 in W36 with only 200 m from faction 2 → event 1→null; W37 stays unclaimed (225/100/bonus 100).",
+      "cell": "891f40da98fffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 900
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 900
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 900
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 200
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 200
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 450
+              },
+              {
+                "factionId": 2,
+                "strength": 200
+              }
+            ],
+            "owner": null,
+            "flipped": true,
+            "captain": null,
+            "event": {
+              "from": 1,
+              "to": null
+            }
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [],
+          "bonuses": [
+            {
+              "factionId": 3,
+              "userId": "u3",
+              "meters": 100
+            }
+          ],
+          "expected": {
+            "capped": [],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 225
+              },
+              {
+                "factionId": 2,
+                "strength": 100
+              },
+              {
+                "factionId": 3,
+                "strength": 100
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "exact-tie-incumbent-keeps",
+      "description": "Table row \"Exact tie at the top → incumbent keeps\": faction 1 owns with 600; in W36 and W37 both factions end at exactly 600 → no flip.",
+      "cell": "891f40da993ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 600
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 600
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 600
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 300
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 600
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 300
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 600
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 600
+              },
+              {
+                "factionId": 2,
+                "strength": 600
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": "u1"
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 300
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 300
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 300
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 300
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 600
+              },
+              {
+                "factionId": 2,
+                "strength": 600
+              }
+            ],
+            "owner": 1,
+            "flipped": false,
+            "captain": "u1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "exact-tie-no-incumbent",
+      "description": "Table row \"Exact tie at the top … if none, unclaimed\": 700/700 in W35 and W36 stay unclaimed; W37 breaks the tie (750 vs 700) → faction 1 claims (event null→1).",
+      "cell": "891f40da997ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 700
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 700
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 700
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 700
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 700
+              },
+              {
+                "factionId": 2,
+                "strength": 700
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 350
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 350
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 350
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 350
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 700
+              },
+              {
+                "factionId": 2,
+                "strength": 700
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 400
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 350
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 400
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 350
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 750
+              },
+              {
+                "factionId": 2,
+                "strength": 700
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "cap-and-bonus",
+      "description": "Weekly cap and capture bonus: u1 walks 2 600 m (capped to 2 000) plus a 300 m bonus (uncapped) → 2 300; W36 faction 2 stacks two capped players (2 000 + 2 000) and a 200 m bonus → 4 700 and flips; W37 faction 1 (u1 3 000 → 2 000, u5 50) reaches 2 625 ≥ 2 350 × 1.10 and flips back.",
+      "cell": "891f40da99bffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 2600
+            },
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 1000
+            }
+          ],
+          "bonuses": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 300
+            }
+          ],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 2000
+              },
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 1000
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 2300
+              },
+              {
+                "factionId": 2,
+                "strength": 1000
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 2000
+            },
+            {
+              "factionId": 2,
+              "userId": "u4",
+              "meters": 2500
+            }
+          ],
+          "bonuses": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 200
+            }
+          ],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 2000
+              },
+              {
+                "factionId": 2,
+                "userId": "u4",
+                "cappedMeters": 2000
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 1150
+              },
+              {
+                "factionId": 2,
+                "strength": 4700
+              }
+            ],
+            "owner": 2,
+            "flipped": true,
+            "captain": "u2",
+            "event": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 3000
+            },
+            {
+              "factionId": 1,
+              "userId": "u5",
+              "meters": 50
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 2000
+              },
+              {
+                "factionId": 1,
+                "userId": "u5",
+                "cappedMeters": 50
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 2625
+              },
+              {
+                "factionId": 2,
+                "strength": 2350
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": 2,
+              "to": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "incumbent-below-min-challenger-above-min",
+      "description": "Gap in the table pinned by this fixture: incumbent decays to 480 (< 500) while a challenger reaches 520 (≥ 500 but < 480 × 1.10 = 528). An incumbent below MIN_STRENGTH no longer holds the cell, so hysteresis does not protect it → challenger takes it (event 1→2). W37 both decay below 500 → unclaimed (event 2→null).",
+      "cell": "891f40da9c3ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [
+            {
+              "factionId": 1,
+              "userId": "u1",
+              "meters": 960
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 1,
+                "userId": "u1",
+                "cappedMeters": 960
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 960
+              }
+            ],
+            "owner": 1,
+            "flipped": true,
+            "captain": "u1",
+            "event": {
+              "from": null,
+              "to": 1
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 520
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 520
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 480
+              },
+              {
+                "factionId": 2,
+                "strength": 520
+              }
+            ],
+            "owner": 2,
+            "flipped": true,
+            "captain": "u2",
+            "event": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [
+            {
+              "factionId": 2,
+              "userId": "u2",
+              "meters": 100
+            }
+          ],
+          "bonuses": [],
+          "expected": {
+            "capped": [
+              {
+                "factionId": 2,
+                "userId": "u2",
+                "cappedMeters": 100
+              }
+            ],
+            "strengths": [
+              {
+                "factionId": 1,
+                "strength": 240
+              },
+              {
+                "factionId": 2,
+                "strength": 360
+              }
+            ],
+            "owner": null,
+            "flipped": true,
+            "captain": null,
+            "event": {
+              "from": 2,
+              "to": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bonus-only",
+      "description": "Bonuses alone can claim: bird (300) + plant (200) bonuses reach exactly 500 = MIN_STRENGTH → faction 3 claims with no walk metres (captain null); W36 decays to 250 → unclaimed; W37 250 × 0.5 + 300 = 425 → still unclaimed.",
+      "cell": "891f40da9c7ffff",
+      "initial": {
+        "owner": null,
+        "strengths": []
+      },
+      "weeks": [
+        {
+          "weekId": "2026-W35",
+          "contributions": [],
+          "bonuses": [
+            {
+              "factionId": 3,
+              "userId": "u3",
+              "meters": 300
+            },
+            {
+              "factionId": 3,
+              "userId": "u3",
+              "meters": 200
+            }
+          ],
+          "expected": {
+            "capped": [],
+            "strengths": [
+              {
+                "factionId": 3,
+                "strength": 500
+              }
+            ],
+            "owner": 3,
+            "flipped": true,
+            "captain": null,
+            "event": {
+              "from": null,
+              "to": 3
+            }
+          }
+        },
+        {
+          "weekId": "2026-W36",
+          "contributions": [],
+          "bonuses": [],
+          "expected": {
+            "capped": [],
+            "strengths": [
+              {
+                "factionId": 3,
+                "strength": 250
+              }
+            ],
+            "owner": null,
+            "flipped": true,
+            "captain": null,
+            "event": {
+              "from": 3,
+              "to": null
+            }
+          }
+        },
+        {
+          "weekId": "2026-W37",
+          "contributions": [],
+          "bonuses": [
+            {
+              "factionId": 3,
+              "userId": "u3",
+              "meters": 300
+            }
+          ],
+          "expected": {
+            "capped": [],
+            "strengths": [
+              {
+                "factionId": 3,
+                "strength": 425
+              }
+            ],
+            "owner": null,
+            "flipped": false,
+            "captain": null
+          }
+        }
+      ]
+    }
+  ],
+  "parentCases": [
+    {
+      "id": "plurality-42pct",
+      "input": {
+        "childOwners": [1, 1, 1, 2, 2, 3, 3, null]
+      },
+      "expected": {
+        "owner": 1
+      }
+    },
+    {
+      "id": "tie",
+      "input": {
+        "childOwners": [1, 1, 2, 2, null]
+      },
+      "expected": {
+        "owner": null
+      }
+    },
+    {
+      "id": "one-claimed-child",
+      "input": {
+        "childOwners": [1, null, null]
+      },
+      "expected": {
+        "owner": null
+      }
+    },
+    {
+      "id": "no-claimed",
+      "input": {
+        "childOwners": [null, null]
+      },
+      "expected": {
+        "owner": null
+      }
+    },
+    {
+      "id": "exactly-40pct-not-enough",
+      "input": {
+        "childOwners": [1, 1, 2, 3, 2]
+      },
+      "expected": {
+        "owner": null
+      }
+    },
+    {
+      "id": "exactly-40pct-no-tie",
+      "input": {
+        "childOwners": [1, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+      },
+      "expected": {
+        "owner": null
+      }
+    },
+    {
+      "id": "two-claimed-same-faction",
+      "input": {
+        "childOwners": [2, 2, null, null, null, null, null]
+      },
+      "expected": {
+        "owner": 2
+      }
+    },
+    {
+      "id": "all-seven-one-faction",
+      "input": {
+        "childOwners": [3, 3, 3, 3, 3, 3, 3]
+      },
+      "expected": {
+        "owner": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "$id": "latlng-to-cell",
+  "title": "latlng-to-cell fixture",
+  "type": "object",
+  "required": ["name", "description", "generator", "version", "seed", "cases"],
+  "properties": {
+    "name": {
+      "description": "equals the file name without .json",
+      "const": "latlng-to-cell",
+      "type": "string"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "generator": {
+      "pattern": "^scripts/generate\\.ts#[A-Za-z]+$",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "description": "bump when the shape (not the values) changes",
+      "type": "integer"
+    },
+    "seed": {
+      "description": "PRNG seed used by the generator",
+      "type": "integer"
+    },
+    "cases": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "input", "expected"],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "unique within the file; used in test names",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["lat", "lon"],
+            "properties": {
+              "lat": {
+                "minimum": -90,
+                "maximum": 90,
+                "type": "number"
+              },
+              "lon": {
+                "minimum": -180,
+                "maximum": 180,
+                "type": "number"
+              }
+            }
+          },
+          "expected": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["r9", "parents", "boundaryVertexCount"],
+            "properties": {
+              "r9": {
+                "pattern": "^[0-9a-f]{15}$",
+                "description": "H3 index string",
+                "type": "string"
+              },
+              "parents": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": ["r8", "r7", "r6", "r5"],
+                "properties": {
+                  "r8": {
+                    "pattern": "^[0-9a-f]{15}$",
+                    "description": "H3 index string",
+                    "type": "string"
+                  },
+                  "r7": {
+                    "pattern": "^[0-9a-f]{15}$",
+                    "description": "H3 index string",
+                    "type": "string"
+                  },
+                  "r6": {
+                    "pattern": "^[0-9a-f]{15}$",
+                    "description": "H3 index string",
+                    "type": "string"
+                  },
+                  "r5": {
+                    "pattern": "^[0-9a-f]{15}$",
+                    "description": "H3 index string",
+                    "type": "string"
+                  }
+                }
+              },
+              "boundaryVertexCount": {
+                "description": "6 for hexagons; 5 for pentagons at class II (even) resolutions, 10 at class III (odd) resolutions such as 9",
+                "anyOf": [
+                  {
+                    "const": 5,
+                    "type": "number"
+                  },
+                  {
+                    "const": 6,
+                    "type": "number"
+                  },
+                  {
+                    "const": 10,
+                    "type": "number"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

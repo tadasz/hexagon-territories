@@ -1,0 +1,43 @@
+{
+  "name": "@nature/h3-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared JSON fixtures (and their schema) for the TypeScript and Swift territory rules",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./fixtures/*.json": "./fixtures/*.json",
+    "./schema/*.schema.json": "./schema/*.schema.json"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "schema"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist coverage .turbo",
+    "generate": "tsx scripts/generate.ts"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "h3-js": "^4.2.1",
+    "prettier": "^3.6.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

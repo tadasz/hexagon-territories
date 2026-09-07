@@ -1,0 +1,36 @@
+{
+  "name": "@nature/territory-rules",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure territory rules: zoom to resolution, sample acceptance, path to hex metres, weekly cap, reckoning, parent ownership",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist coverage .turbo"
+  },
+  "dependencies": {
+    "h3-js": "^4.2.1"
+  },
+  "devDependencies": {
+    "@nature/h3-fixtures": "workspace:*",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

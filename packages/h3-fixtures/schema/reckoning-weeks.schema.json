@@ -1,0 +1,340 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "$id": "reckoning-weeks",
+  "title": "reckoning-weeks fixture",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "generator",
+    "version",
+    "seed",
+    "factions",
+    "weeks",
+    "cells",
+    "parentCases"
+  ],
+  "properties": {
+    "name": {
+      "description": "equals the file name without .json",
+      "const": "reckoning-weeks",
+      "type": "string"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "generator": {
+      "pattern": "^scripts/generate\\.ts#[A-Za-z]+$",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "description": "bump when the shape (not the values) changes",
+      "type": "integer"
+    },
+    "seed": {
+      "description": "PRNG seed used by the generator",
+      "type": "integer"
+    },
+    "factions": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    "weeks": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "pattern": "^\\d{4}-W\\d{2}$",
+        "description": "ISO week id, UTC",
+        "type": "string"
+      }
+    },
+    "cells": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "description", "cell", "initial", "weeks"],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "unique within the file; used in test names",
+            "type": "string"
+          },
+          "description": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "cell": {
+            "pattern": "^[0-9a-f]{15}$",
+            "description": "H3 index string",
+            "type": "string"
+          },
+          "initial": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["owner", "strengths"],
+            "properties": {
+              "owner": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "strengths": {
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": ["factionId", "strength"],
+                  "properties": {
+                    "factionId": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "strength": {
+                      "minimum": 0,
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "weeks": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": ["weekId", "contributions", "bonuses", "expected"],
+              "properties": {
+                "weekId": {
+                  "pattern": "^\\d{4}-W\\d{2}$",
+                  "description": "ISO week id, UTC",
+                  "type": "string"
+                },
+                "contributions": {
+                  "description": "raw per (faction,user); the test applies applyWeeklyCap first",
+                  "type": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": ["factionId", "userId", "meters"],
+                    "properties": {
+                      "factionId": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "userId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "meters": {
+                        "minimum": 0,
+                        "type": "number"
+                      }
+                    }
+                  }
+                },
+                "bonuses": {
+                  "description": "verified capture bonuses; never capped",
+                  "type": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": ["factionId", "userId", "meters"],
+                    "properties": {
+                      "factionId": {
+                        "minimum": 1,
+                        "type": "integer"
+                      },
+                      "userId": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "meters": {
+                        "minimum": 0,
+                        "type": "number"
+                      }
+                    }
+                  }
+                },
+                "expected": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": ["capped", "strengths", "owner", "flipped", "captain"],
+                  "properties": {
+                    "capped": {
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": ["factionId", "userId", "cappedMeters"],
+                        "properties": {
+                          "factionId": {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "userId": {
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "cappedMeters": {
+                            "minimum": 0,
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "strengths": {
+                      "description": "sorted by factionId; tolerance ±0.01",
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": ["factionId", "strength"],
+                        "properties": {
+                          "factionId": {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "strength": {
+                            "minimum": 0,
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "owner": {
+                      "anyOf": [
+                        {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "flipped": {
+                      "type": "boolean"
+                    },
+                    "event": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": ["from", "to"],
+                      "properties": {
+                        "from": {
+                          "anyOf": [
+                            {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "to": {
+                          "anyOf": [
+                            {
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "captain": {
+                      "description": "top walking contributor (capped metres) of the owning faction, ties by userId asc; null when unclaimed or no walk metres",
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "parentCases": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["id", "input", "expected"],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "unique within the file; used in test names",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["childOwners"],
+            "properties": {
+              "childOwners": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "expected": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": ["owner"],
+            "properties": {
+              "owner": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
