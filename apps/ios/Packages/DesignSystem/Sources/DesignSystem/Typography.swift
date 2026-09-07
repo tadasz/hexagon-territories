@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 /// Text styles used across feature packages. Computed properties (not stored globals) keep the type free of
@@ -12,3 +13,4 @@ public enum Typography {
     /// Small always-visible labels such as the map attribution.
     public static var attribution: Font { .system(.caption2) }
 }
+#endif

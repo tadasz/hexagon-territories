@@ -7,9 +7,16 @@ included:
   - Packages/TerritoryRules
   - Packages/DesignSystem
   - Packages/MapFeature
+  - Packages/Core
+  - Packages/APIClient/Sources
+  - Packages/APIClient/Tests
+  - Packages/AuthFeature
+  - Packages/FactionsFeature
+  - Packages/ProfileFeature
 excluded:
   - Packages/H3Kit/Sources/CH3     # vendored C
   - "**/.build"
+  - Packages/APIClient/Sources/APIClient/openapi.json   # generator input, not Swift
   - "**/*.xcodeproj"
 disabled_rules:
   - todo                            # TODO markers are tracked in specs/*/tasks.md, not by the linter

@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 /// Client-side mirror of the `factions` seed (data-model.md §4.2, `docs/architecture.md` §1): Owls green,
@@ -90,3 +91,4 @@ public enum AppColors {
     /// Outline colour for contested hexes (pulsing/hatched in the map layer).
     public static var contestedOutline: Color { Color(hex: "#FF5722") ?? .orange }
 }
+#endif

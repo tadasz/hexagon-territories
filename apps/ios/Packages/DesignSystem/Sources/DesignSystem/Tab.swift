@@ -1,12 +1,13 @@
 import Foundation
 
-/// The five tabs of the 001 shell (spec FR-007, plan.md deviation "five tabs"): Map · Walk · Capture · Collection ·
-/// Profile. Factions arrives with feature 002. Order of `allCases` is the tab bar order.
+/// The six tabs of the shell (`docs/architecture.md` §4: Map · Walk · Capture · Collection · Factions · Profile;
+/// plan.md 002 "Six tabs" resolves 001's five-tab deviation). Order of `allCases` is the tab bar order.
 public enum AppTab: String, CaseIterable, Identifiable, Sendable, Codable {
     case map
     case walk
     case capture
     case collection
+    case factions
     case profile
 
     public var id: String { rawValue }
@@ -17,6 +18,7 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable, Codable {
         case .walk: "Walk"
         case .capture: "Capture"
         case .collection: "Collection"
+        case .factions: "Factions"
         case .profile: "Profile"
         }
     }
@@ -28,6 +30,7 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable, Codable {
         case .walk: "figure.walk"
         case .capture: "camera.viewfinder"
         case .collection: "books.vertical"
+        case .factions: "flag.2.crossed"
         case .profile: "person.crop.circle"
         }
     }

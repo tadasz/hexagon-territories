@@ -48,6 +48,17 @@ packages:
     path: Packages/DesignSystem
   MapFeature:
     path: Packages/MapFeature
+  # Feature 002 (research.md R11–R13): Core (session, models, validators), the generated client, three features.
+  Core:
+    path: Packages/Core
+  APIClient:
+    path: Packages/APIClient
+  AuthFeature:
+    path: Packages/AuthFeature
+  FactionsFeature:
+    path: Packages/FactionsFeature
+  ProfileFeature:
+    path: Packages/ProfileFeature
 
 targets:
   NatureExplorer:
@@ -57,6 +68,7 @@ targets:
       - path: NatureExplorer
         excludes:
           - Info.plist
+          - NatureExplorer.entitlements
       - path: Resources
         type: folder
         buildPhase: resources
@@ -67,12 +79,19 @@ targets:
       - package: TerritoryRules
       - package: DesignSystem
       - package: MapFeature
+      - package: Core
+      - package: APIClient
+      - package: AuthFeature
+      - package: FactionsFeature
+      - package: ProfileFeature
     settings:
       base:
         # Final bundle identifier (owner confirmed 2026-09-07).
         PRODUCT_BUNDLE_IDENTIFIER: com.natureexplorer.app
         PRODUCT_NAME: NatureExplorer
         INFOPLIST_FILE: NatureExplorer/Info.plist
+        # Sign in with Apple (feature 002, research.md R13); the App ID needs the capability too (owner action).
+        CODE_SIGN_ENTITLEMENTS: NatureExplorer/NatureExplorer.entitlements
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SUPPORTS_MACCATALYST: NO
@@ -96,6 +115,9 @@ targets:
       - package: TerritoryRules
       - package: MapFeature
       - package: DesignSystem
+      - package: Core
+      - package: Core
+        product: CoreTestSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.natureexplorer.app.tests

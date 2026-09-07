@@ -4,7 +4,7 @@ import SwiftUI
 /// (`docs/architecture.md` §4: SwiftUI views → `@Observable` view models → protocol-typed services from `AppContainer`).
 @main
 struct NatureExplorerApp: App {
-    @State private var container = AppContainer()
+    @State private var container = AppContainer.live()
 
     var body: some Scene {
         WindowGroup {

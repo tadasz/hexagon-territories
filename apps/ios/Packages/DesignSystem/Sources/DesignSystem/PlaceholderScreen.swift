@@ -1,3 +1,4 @@
+#if canImport(SwiftUI)
 import SwiftUI
 
 /// Placeholder for tabs whose feature has not landed yet (Walk, Capture, Collection, Profile in 001).
@@ -21,3 +22,4 @@ public struct PlaceholderScreen: View {
 #Preview {
     PlaceholderScreen(title: "Walk", systemImage: "figure.walk")
 }
+#endif

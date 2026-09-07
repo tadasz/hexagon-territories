@@ -1,0 +1,7 @@
+# swift-openapi-generator configuration (research.md R11). The document next to this file, openapi.json, is a copy of
+# packages/api-schema/openapi.json written by apps/ios/scripts/sync-openapi.sh; never edit it by hand.
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
