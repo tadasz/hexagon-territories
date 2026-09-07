@@ -1,0 +1,672 @@
+openapi: 3.1.0
+info:
+  title: Nature Explorer API
+  version: 0.3.0
+  description: |
+    Fragment for feature 003-walk-tracking: walk sessions (create, sample batches, finish,
+    history). The running API serves the merged document at GET /openapi.json (generated from
+    TypeBox schemas by @fastify/swagger); packages/api-schema/openapi.json is the committed
+    snapshot and the source the iOS client is generated from. The `Error` envelope and the
+    `bearerAuth` scheme come from features 001/002 and are repeated so this fragment stands alone.
+
+    Scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md "Scoring at walk
+    finish"). Sample uploads store raw data and answer a provisional filter result. Ownership of
+    hexagons never changes here (feature 004).
+servers:
+  - url: http://localhost:3000
+    description: Local development (make dev)
+tags:
+  - name: walks
+    description: Walk sessions of the signed-in player (paths are private to their owner)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/walks:
+    post:
+      tags: [walks]
+      operationId: createWalk
+      summary: Start a walk (idempotent on clientWalkId)
+      description: |
+        Creates the walk for `(player, clientWalkId)`; repeating the call returns the same walk
+        with 200. `startedAt` is clamped to [now − 12 h, now + 5 min]. If the player has an
+        active walk whose last activity precedes `startedAt`, that walk is finished automatically
+        (`supersededWalkId`, reason `superseded`); if the ranges overlap the request is refused
+        with 409 WALK_OVERLAP. Players without a faction cannot start walks (403
+        FACTION_REQUIRED). Rate limited: 20 creations per hour per player.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalkCreateRequest"
+      responses:
+        "201":
+          description: Walk created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalkCreated"
+        "200":
+          description: Walk already existed for this clientWalkId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalkCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The player has no faction yet (code FACTION_REQUIRED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Overlaps the player's active walk (code WALK_OVERLAP, `details.activeWalkId`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    get:
+      tags: [walks]
+      operationId: listWalks
+      summary: The player's walks, newest first
+      description: |
+        Cursor pagination over the caller's own walks ordered by start time descending.
+        `nextCursor` is opaque; pass it back to get the next page; null when exhausted.
+        List items carry no path and no per-hex rows (use GET /v1/walks/{id}).
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: One page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalkListPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/walks/{id}/samples:
+    post:
+      tags: [walks]
+      operationId: uploadWalkSamples
+      summary: Upload a batch of raw location samples (store only)
+      description: |
+        Stores up to 200 samples idempotently by `(walk, seq)`: re-delivered or reordered batches
+        never duplicate rows and never change the final score. The answer reports how many rows
+        were new and a **provisional** result of the shared sample filter (accuracy > 50 m,
+        speed > 5 m/s, non-monotonic timestamp); the finish step re-runs the filter over all
+        stored samples. Nothing is scored here. Rate limited: 30 batches per 15 minutes per
+        player (2 per minute average) and 8 640 stored samples per UTC day.
+      parameters:
+        - $ref: "#/components/parameters/WalkId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SampleBatchRequest"
+      responses:
+        "200":
+          description: Batch stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SampleBatchResult"
+              example:
+                stored: 198
+                duplicates: 2
+                accepted: [0, 1, 2, 3]
+                rejected: [{ seq: 4, reason: accuracy }]
+                sampleCount: 200
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/WalkNotFound"
+        "409":
+          description: The walk is no longer active (code WALK_NOT_ACTIVE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Batch rate limit (RATE_LIMITED) or daily sample quota (SAMPLE_QUOTA_EXCEEDED); `details.retryAfterS` and the `retry-after` header say how long to wait
+          headers:
+            retry-after:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/walks/{id}/finish:
+    post:
+      tags: [walks]
+      operationId: finishWalk
+      summary: Finish the walk and score it (the only scoring path)
+      description: |
+        In one transaction: re-run the sample filter over every stored sample, compute walk
+        flags, simplify the accepted path (5 m), split it into resolution-9 cells, store the path
+        and per-cell metres, set `weekId` to the ISO week (UTC) of the clamped end time
+        (max(last accepted sample, min(endedAt, now))). Unflagged walks credit the player's
+        faction per cell for the week (2 000 m cap per player per cell per week) and award 1 XP
+        per 100 m (300 XP per day cap). Flagged walks store everything but credit nothing
+        (`scored: false`, every `cappedMeters` 0, `xp` 0). Calling finish on an already finished
+        walk returns the stored summary unchanged.
+      parameters:
+        - $ref: "#/components/parameters/WalkId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalkFinishRequest"
+      responses:
+        "200":
+          description: Authoritative summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalkSummary"
+              example:
+                walkId: 2f9b7c1e-1b2c-4d3e-9f0a-1a2b3c4d5e6f
+                clientWalkId: 6d1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b
+                status: finished
+                finishReason: client
+                startedAt: "2026-09-07T08:00:00.000Z"
+                endedAt: "2026-09-07T08:35:10.000Z"
+                finishedAt: "2026-09-07T08:35:12.417Z"
+                weekId: 2026-W37
+                distanceM: 2611.4
+                durationS: 2110
+                steps: 3400
+                sampleCount: 422
+                hexCount: 5
+                xp: 26
+                scored: true
+                flags: []
+                hexes:
+                  - h3: 891f40d1a4fffff
+                    meters: 812.3
+                    cappedMeters: 812.3
+                    weekStanding: { leader: 1, myFactionShare: 0.64, owner: null }
+                path:
+                  type: LineString
+                  coordinates: [[23.9320, 54.9035], [23.9331, 54.9041]]
+        "400":
+          description: Validation failed, or `endedAt` before `startedAt` (code INVALID_ENDED_AT)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/WalkNotFound"
+
+  /v1/walks/{id}:
+    get:
+      tags: [walks]
+      operationId: getWalk
+      summary: One of the player's walks with its path and per-hex metres
+      description: Only the owner can read a walk; any other id answers 404 WALK_NOT_FOUND.
+      parameters:
+        - $ref: "#/components/parameters/WalkId"
+      responses:
+        "200":
+          description: Walk detail (same shape as the finish summary; `hexes` empty and `path` null while active)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalkSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/WalkNotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /v1/auth/apple or /v1/auth/refresh (feature 002)
+
+  parameters:
+    WalkId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    WalkCreateRequest:
+      type: object
+      required: [clientWalkId, startedAt]
+      additionalProperties: false
+      properties:
+        clientWalkId:
+          type: string
+          format: uuid
+          description: Generated on the device when the walk starts; the idempotency key
+        startedAt:
+          type: string
+          format: date-time
+        deviceInfo:
+          type: object
+          additionalProperties: false
+          properties:
+            model:
+              type: string
+              maxLength: 64
+            osVersion:
+              type: string
+              maxLength: 32
+            appVersion:
+              type: string
+              maxLength: 32
+
+    WalkCreated:
+      type: object
+      required: [walkId, clientWalkId, startedAt, status, supersededWalkId]
+      additionalProperties: false
+      properties:
+        walkId:
+          type: string
+          format: uuid
+        clientWalkId:
+          type: string
+          format: uuid
+        startedAt:
+          type: string
+          format: date-time
+          description: After clamping
+        status:
+          type: string
+          enum: [active]
+        supersededWalkId:
+          type: [string, "null"]
+          format: uuid
+          description: The previously active walk that was auto-finished by this creation
+
+    LocationSample:
+      type: object
+      required: [seq, ts, lat, lon, hAcc]
+      additionalProperties: false
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+        ts:
+          type: string
+          format: date-time
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lon:
+          type: number
+          minimum: -180
+          maximum: 180
+        hAcc:
+          type: number
+          minimum: 0
+          description: Horizontal accuracy in metres
+        speed:
+          type: [number, "null"]
+          minimum: 0
+          description: Device-reported speed in m/s
+        course:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 360
+        alt:
+          type: [number, "null"]
+
+    PedometerWindow:
+      type: object
+      required: [steps, since, until]
+      additionalProperties: false
+      properties:
+        steps:
+          type: integer
+          minimum: 0
+        since:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+
+    SampleBatchRequest:
+      type: object
+      required: [samples]
+      additionalProperties: false
+      properties:
+        samples:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/LocationSample"
+        pedometer:
+          $ref: "#/components/schemas/PedometerWindow"
+
+    RejectedSample:
+      type: object
+      required: [seq, reason]
+      additionalProperties: false
+      properties:
+        seq:
+          type: integer
+        reason:
+          type: string
+          enum: [accuracy, speed, non_monotonic]
+
+    SampleBatchResult:
+      type: object
+      required: [stored, duplicates, accepted, rejected, sampleCount]
+      additionalProperties: false
+      properties:
+        stored:
+          type: integer
+          minimum: 0
+          description: Rows inserted by this call
+        duplicates:
+          type: integer
+          minimum: 0
+          description: Samples whose seq was already stored (ignored)
+        accepted:
+          type: array
+          items:
+            type: integer
+          description: Provisionally accepted seqs among the stored rows
+        rejected:
+          type: array
+          items:
+            $ref: "#/components/schemas/RejectedSample"
+          description: Provisionally rejected seqs among the stored rows
+        sampleCount:
+          type: integer
+          minimum: 0
+          description: Total stored samples of the walk
+
+    WalkFinishRequest:
+      type: object
+      required: [endedAt]
+      additionalProperties: false
+      properties:
+        endedAt:
+          type: string
+          format: date-time
+        pedometerTotal:
+          type: [integer, "null"]
+          minimum: 0
+          description: Steps counted by the device during the walk; omitted when the pedometer is unavailable
+
+    WeekStanding:
+      type: object
+      required: [leader, myFactionShare, owner]
+      additionalProperties: false
+      properties:
+        leader:
+          type: [integer, "null"]
+          description: Faction with the highest (strength × 0.5 + this week's capped metres + bonuses); null when nobody has anything
+        myFactionShare:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: The player's faction's share of this week's total score in the cell
+        owner:
+          type: [integer, "null"]
+          description: Current owner from the last reckoning (informational; unchanged by walks)
+
+    WalkHex:
+      type: object
+      required: [h3, meters, cappedMeters, weekStanding]
+      additionalProperties: false
+      properties:
+        h3:
+          type: string
+          pattern: "^[0-9a-f]{15}$"
+        meters:
+          type: number
+          minimum: 0
+          description: Raw metres of this walk's simplified path inside the cell
+        cappedMeters:
+          type: number
+          minimum: 0
+          description: Metres of this walk that counted toward the player's 2 000 m weekly cap in the cell (0 when flagged)
+        weekStanding:
+          $ref: "#/components/schemas/WeekStanding"
+
+    LineString:
+      type: object
+      required: [type, coordinates]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum: [LineString]
+        coordinates:
+          type: array
+          minItems: 2
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: number
+          description: GeoJSON positions [lon, lat]
+
+    WalkSummary:
+      type: object
+      required: [walkId, clientWalkId, status, finishReason, startedAt, endedAt, finishedAt, weekId, distanceM, durationS, steps, sampleCount, hexCount, xp, scored, flags, hexes, path]
+      additionalProperties: false
+      properties:
+        walkId:
+          type: string
+          format: uuid
+        clientWalkId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, finished, flagged, abandoned]
+        finishReason:
+          type: [string, "null"]
+          enum: [client, autofinish, superseded, null]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+        finishedAt:
+          type: [string, "null"]
+          format: date-time
+        weekId:
+          type: [string, "null"]
+          pattern: "^[0-9]{4}-W[0-9]{2}$"
+        distanceM:
+          type: number
+          minimum: 0
+        durationS:
+          type: integer
+          minimum: 0
+        steps:
+          type: [integer, "null"]
+        sampleCount:
+          type: integer
+          minimum: 0
+        hexCount:
+          type: integer
+          minimum: 0
+        xp:
+          type: integer
+          minimum: 0
+        scored:
+          type: boolean
+          description: True when contributions and XP were written (false while active and for flagged walks)
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [teleport, speed, distance, no_steps]
+        hexes:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalkHex"
+          description: Sorted by h3 ascending; empty while active
+        path:
+          oneOf:
+            - $ref: "#/components/schemas/LineString"
+            - type: "null"
+          description: Simplified accepted path; null while active or with fewer than two accepted samples
+
+    WalkListItem:
+      type: object
+      required: [walkId, clientWalkId, status, finishReason, startedAt, endedAt, weekId, distanceM, durationS, hexCount, xp, scored, flags]
+      additionalProperties: false
+      properties:
+        walkId:
+          type: string
+          format: uuid
+        clientWalkId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, finished, flagged, abandoned]
+        finishReason:
+          type: [string, "null"]
+          enum: [client, autofinish, superseded, null]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: [string, "null"]
+          format: date-time
+        weekId:
+          type: [string, "null"]
+        distanceM:
+          type: number
+        durationS:
+          type: integer
+        hexCount:
+          type: integer
+        xp:
+          type: integer
+        scored:
+          type: boolean
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [teleport, speed, distance, no_steps]
+
+    WalkListPage:
+      type: object
+      required: [items, nextCursor]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalkListItem"
+        nextCursor:
+          type: [string, "null"]
+
+    Error:
+      type: object
+      description: |
+        Shared error envelope returned by every non-2xx response (feature 001). `code` is a stable
+        machine-readable identifier in SCREAMING_SNAKE_CASE; `message` is for developers; `details`
+        carries structured context.
+      required: [error, requestId]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              pattern: "^[A-Z][A-Z0-9_]+$"
+              examples:
+                - VALIDATION_FAILED
+                - UNAUTHORIZED
+                - TOKEN_EXPIRED
+                - ACCOUNT_DELETED
+                - RATE_LIMITED
+                - WALK_NOT_FOUND
+                - WALK_NOT_ACTIVE
+                - WALK_OVERLAP
+                - FACTION_REQUIRED
+                - INVALID_ENDED_AT
+                - SAMPLE_QUOTA_EXCEEDED
+                - DB_UNAVAILABLE
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        requestId:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Request validation failed (code VALIDATION_FAILED; `details.field` names the offending field, e.g. `samples` for a batch over 200 or `cursor` for a malformed cursor)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid access token (UNAUTHORIZED), expired token (TOKEN_EXPIRED) or deleted account (ACCOUNT_DELETED)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    WalkNotFound:
+      description: Unknown walk id or a walk that belongs to another player (code WALK_NOT_FOUND; never distinguishes the two)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Too many requests (code RATE_LIMITED, `details.retryAfterS`); the `retry-after` header is set
+      headers:
+        retry-after:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
