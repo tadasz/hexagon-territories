@@ -2,8 +2,9 @@
 
 Run with ``python3 -m unittest discover -s ml/tests -v`` (no third-party
 dependencies). The rules come from ``specs/001-repo-foundations/data-model.md``
-§3 and Constitution Principle III (Licence Before Ship): a model whose licence
-is non-commercial may never carry a ``primary-*`` role.
+§3 and Constitution Principle III v1.1.0 (Licence Before Ship, ADR 0011): a model
+whose licence is non-commercial may never carry a ``primary-*`` role and may
+never be allowed in App Store builds (``allowed_builds`` without ``appstore``).
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ ROLES = {
     "evaluation-only",
 }
 AUDIO_KINDS = {"bird-audio-classifier"}
+BUILDS = {"debug", "testflight", "appstore"}
 REQUIRED_KEYS = {
     "name",
     "kind",
@@ -43,6 +45,7 @@ REQUIRED_KEYS = {
     "attribution",
     "sha256",
     "role",
+    "allowed_builds",
     "notes",
     "files",
 }
@@ -60,12 +63,17 @@ def is_non_commercial(license_text: str) -> bool:
 
 
 def licence_violations(manifest: dict) -> list[str]:
-    """Constitution III: no non-commercial licence on a ``primary-*`` role."""
+    """Constitution III (v1.1.0, ADR 0011): a non-commercial licence never carries a
+    ``primary-*`` role and never lists ``appstore`` in ``allowed_builds``."""
     problems = []
     for model in manifest.get("models", []):
         role = model.get("role", "")
-        if role.startswith("primary-") and is_non_commercial(model.get("license", "")):
+        if not is_non_commercial(model.get("license", "")):
+            continue
+        if role.startswith("primary-"):
             problems.append(f"{model.get('name')}: role {role} with non-commercial licence {model.get('license')!r}")
+        if "appstore" in (model.get("allowed_builds") or []):
+            problems.append(f"{model.get('name')}: non-commercial licence {model.get('license')!r} allowed in appstore builds")
     return problems
 
 
@@ -104,6 +112,22 @@ class ManifestSchemaTests(unittest.TestCase):
                 self.assertIn(model["kind"], KINDS)
                 self.assertIn(model["format"], FORMATS)
                 self.assertIn(model["role"], ROLES)
+
+    def test_allowed_builds_is_a_non_empty_subset_of_known_builds(self) -> None:
+        for model in self.models:
+            with self.subTest(model=model["name"]):
+                builds = model.get("allowed_builds")
+                self.assertIsInstance(builds, list)
+                self.assertTrue(builds, "allowed_builds must not be empty")
+                self.assertEqual(len(builds), len(set(builds)), "duplicate build types")
+                self.assertTrue(set(builds) <= BUILDS, f"unknown build types {sorted(set(builds) - BUILDS)}")
+
+    def test_primary_models_are_allowed_in_every_build(self) -> None:
+        """The primary model must exist in every build so removing a fallback never changes the product."""
+        for model in self.models:
+            if model["role"].startswith("primary-"):
+                with self.subTest(model=model["name"]):
+                    self.assertEqual(set(model["allowed_builds"]), BUILDS)
 
     def test_audio_models_declare_sample_rate_and_window(self) -> None:
         for model in self.models:
@@ -186,10 +210,25 @@ class LicencePolicyTests(unittest.TestCase):
     def test_guard_rejects_non_commercial_primary_model(self) -> None:
         edited = copy.deepcopy(self.manifest)
         primary = next(m for m in edited["models"] if m["role"] == "primary-on-device")
+        primary["allowed_builds"] = ["debug", "testflight"]
         primary["license"] = "CC-BY-NC-SA-4.0"
         self.assertTrue(licence_violations(edited))
         primary["license"] = "Apache-2.0 (non-commercial evaluation build)"
         self.assertTrue(licence_violations(edited))
+
+    def test_guard_rejects_non_commercial_model_in_appstore_builds(self) -> None:
+        edited = copy.deepcopy(self.manifest)
+        fallback = next(m for m in edited["models"] if m["role"] == "prototype-fallback")
+        self.assertTrue(is_non_commercial(fallback["license"]))
+        fallback["allowed_builds"] = ["debug", "testflight", "appstore"]
+        self.assertEqual(len(licence_violations(edited)), 1)
+
+    def test_non_commercial_models_are_never_allowed_in_appstore_builds(self) -> None:
+        for model in self.manifest["models"]:
+            if is_non_commercial(model["license"]):
+                with self.subTest(model=model["name"]):
+                    self.assertNotIn("appstore", model["allowed_builds"])
+                    self.assertFalse(model["role"].startswith("primary-"))
 
     def test_guard_accepts_permissive_strings(self) -> None:
         for text in ("Apache-2.0", "MIT", "BSD-2-Clause", "Apache-2.0 (bundled weights, per BirdNET Live README)"):

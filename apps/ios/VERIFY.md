@@ -77,4 +77,4 @@ Things a macOS run may surface that could not be checked here:
 - `.gitignore` (T043) should add `apps/ios/Packages/*/.build/` and `apps/ios/.build/`; the `.build` directories
   created by this verification were deleted before hand-off. `Package.resolved` for `MapFeature` will appear on the
   first macOS resolution and should be committed.
-- Owner placeholders: bundle id `com.natureexplorer.app` and `DEVELOPMENT_TEAM` in `project.yml` (`TODO(owner)`).
+- Bundle id `com.natureexplorer.app` in `project.yml` is final (owner confirmed 2026-09-07); `DEVELOPMENT_TEAM` is set by the owner once the App ID exists.

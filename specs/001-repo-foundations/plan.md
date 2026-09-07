@@ -133,7 +133,7 @@ docs/licences.md                           # Stream D (rows + inquiry log update
 | TS fixtures package | `@nature/h3-fixtures` (`packages/h3-fixtures`) |
 | API workspace | `@nature/api` (`apps/api`) |
 | Swift packages | `H3Kit` (products `H3Kit`, C target `CH3`), `TerritoryRules`, `DesignSystem`, `MapFeature` |
-| Xcode app target / scheme | `NatureExplorer` (bundle id `com.natureexplorer.app` — `TODO(owner)`: placeholder; the app is a separate brand the owner has not named yet) |
+| Xcode app target / scheme | `NatureExplorer` (bundle id `com.natureexplorer.app` — final, owner confirmed 2026-09-07) |
 | Postgres image tag | `nature-postgres:16-3.4-h3` (built from `infra/docker/postgres`) |
 | Compose services | `postgres`, `minio`, `api` |
 | pg-boss job | `reckoning.weekly` |
@@ -178,7 +178,7 @@ No constitution violations to justify. The deviations above are scope/sequencing
 
 Decisions only the product owner can make; agents use the placeholders until then.
 
-1. **Bundle identifier / App ID** — `TODO(owner)`: the app is a separate brand that is not named yet; `com.natureexplorer.app` is the placeholder in `apps/ios/project.yml` and must be replaced before the first TestFlight upload.
+1. **Bundle identifier / App ID** — done: `com.natureexplorer.app` in `apps/ios/project.yml` is final (owner confirmed 2026-09-07); `DEVELOPMENT_TEAM` is set once the App ID exists in App Store Connect.
 2. Connect the GitHub repository to Xcode Cloud (see `research.md` open items).
 3. Enable git-lfs on the repository and commit the model weights.
 4. Send the Pl@ntNet Pro inquiry; the Cornell BirdNET V2.4 inquiry is optional until monetisation.

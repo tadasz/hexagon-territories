@@ -1,3 +1,19 @@
+<!--
+Sync Impact Report
+- Version change: 1.0.0 → 1.1.0 (MINOR: Principle III materially expanded — build-type scope
+  for non-commercial weights and the monetisation gate)
+- Modified principles: III. Licence Before Ship (NON-NEGOTIABLE) → same title; "never bundled in
+  a release build" replaced by "allowed in Debug/TestFlight while non-commercial, forbidden in
+  App Store builds, removed or licensed before monetisation"; `allowed_builds` manifest field
+- Added sections: none
+- Removed sections: none
+- Reason recorded in: docs/adr/0011-noncommercial-prototype-models.md
+- Templates/docs checked: docs/adr/0006 (addendum), docs/licences.md, docs/architecture.md §7,
+  docs/roadmap.md (009 exit criterion), ml/models/manifest.json (`allowed_builds`),
+  ml/tests/test_manifest.py, ml/models/README.md, specs/001-repo-foundations/data-model.md §3,
+  CLAUDE.md (no change needed)
+- Follow-up TODOs: none
+-->
 # Nature Explorer Constitution
 
 Nature Explorer is a native iOS game in which players conquer H3 hexagons for their faction by walking, and capture birds (by sound) and plants (by photo). This constitution binds every feature specification, plan, task list and pull request in this repository. Where it conflicts with a template, a skill prompt, or a convenience, the constitution wins.
@@ -11,7 +27,7 @@ All scoring and ownership is computed by the API from data it has validated itse
 Territory rules (path → metres per hex, caps, weekly decay, ownership, parent aggregation, zoom → resolution) live in `packages/territory-rules` (TypeScript) and are mirrored in the Swift package `TerritoryRules`. Both implementations MUST pass the shared JSON fixtures in `packages/h3-fixtures`. A rule change is made in this order: fixtures → TypeScript → Swift → `docs/territory-rules.md`. Metres are scored only in `finishWalk`; ownership changes only in the `reckoning.weekly` job. No other code path writes `hex_state.owner_faction_id`.
 
 ### III. Licence Before Ship (NON-NEGOTIABLE)
-Every ML model, dataset, map tile source, audio reference and species image has an entry with licence and attribution in `ml/models/manifest.json` or `docs/licences.md` before it is referenced by code. Non-commercial licences (for example BirdNET V2.4, CC BY-NC-SA) are never bundled in a release build. Required attribution (Pl@ntNet, BirdNET, OpenStreetMap, Xeno-canto, Wikimedia) is rendered in the app.
+Every ML model, dataset, map tile source, audio reference and species image has an entry with licence and attribution in `ml/models/manifest.json` or `docs/licences.md` before it is referenced by code. Non-commercial weights (for example BirdNET V2.4, CC BY-NC-SA 4.0) MAY be bundled in Debug and TestFlight builds **only while the product is non-commercial** — no revenue of any kind: no subscription, no ads, no paid features, no sponsorship. They are FORBIDDEN in App Store builds and MUST be removed or licensed before any monetisation. Each manifest entry declares `allowed_builds`; a non-commercial model never lists `appstore` and never carries a `primary-*` role. BirdNET+ V3 (Apache 2.0) remains the primary model in every build, so removing a non-commercial fallback never changes the product. Required attribution (Pl@ntNet, BirdNET, OpenStreetMap, Xeno-canto, Wikimedia) is rendered in the app.
 
 ### IV. Privacy by Default
 Walk paths and location samples are the player's own data: private by default, never shown to other players in raw form. Raw location samples are retained at most 30 days; hex-level aggregates are the long-term record. Analytics (PostHog EU) never receive finer than an H3 resolution-7 cell. Account deletion and data export MUST keep working in every release. Infrastructure and analytics stay in the EU.
@@ -46,4 +62,4 @@ Walk tracking, bird listening and capture MUST work with no connectivity, queuei
 
 This constitution supersedes all other practices in the repository. Amendments are made by pull request that updates this file, bumps the version below, and records the reason in a new ADR under `docs/adr/`. Reviewers (human or agent) verify compliance with Principles I–VII on every pull request; any added complexity must be justified in the pull request against Principle VI. `CLAUDE.md` gives agents runtime guidance and must stay consistent with this document.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-07 | **Last Amended**: 2026-09-07
+**Version**: 1.1.0 | **Ratified**: 2026-09-07 | **Last Amended**: 2026-09-07

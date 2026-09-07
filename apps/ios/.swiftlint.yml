@@ -12,7 +12,7 @@ excluded:
   - "**/.build"
   - "**/*.xcodeproj"
 disabled_rules:
-  - todo                            # TODO(owner) markers are intentional until the brand is named
+  - todo                            # TODO markers are tracked in specs/*/tasks.md, not by the linter
   - trailing_comma                  # .swiftformat owns trailing commas
 opt_in_rules:
   - array_init

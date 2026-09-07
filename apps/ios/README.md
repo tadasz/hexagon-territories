@@ -69,8 +69,8 @@ generates the project. It fails the build if `git lfs pull` fails.
 
 ## Configuration
 
-- **Bundle id**: `com.natureexplorer.app` in `project.yml` is a placeholder (`TODO(owner)` — the app is a separate
-  brand that is not named yet). Replace it and `DEVELOPMENT_TEAM` before the first TestFlight upload.
+- **Bundle id**: `com.natureexplorer.app` in `project.yml` is final (owner confirmed 2026-09-07). Set
+  `DEVELOPMENT_TEAM` once the App ID exists, before the first TestFlight upload.
 - **Basemap**: OpenFreeMap `liberty` (global, no key). Override the style with the Info.plist key `MAP_STYLE_URL`
   (read by `MapConfig.fromBundle`), e.g. for a self-hosted PMTiles style. The attribution
   "© OpenStreetMap contributors, © OpenFreeMap" stays visible on the map.

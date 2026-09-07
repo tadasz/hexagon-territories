@@ -12,3 +12,4 @@
 | 0008 | PostHog for analytics, feature flags and crash reporting | accepted |
 | 0009 | Xcode Cloud for iOS CI/CD, GitHub Actions for the rest | accepted |
 | 0010 | Hetzner for hosting and S3-compatible object storage | accepted |
+| 0011 | Non-commercial models (BirdNET V2.4) allowed in Debug and TestFlight builds while the product is non-commercial; forbidden in App Store builds (Constitution III → 1.1.0) | accepted |

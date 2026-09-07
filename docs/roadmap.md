@@ -35,7 +35,7 @@ Features 006 and 004/005 are independent; agents can run them in parallel.
 | 2 — Bird capture (end of MVP) | 006 + minimal 009 | 5 | Eval top-1 ≥ 0.75 on common Lithuanian species; device/cloud agreement ≥ 85 %; offline→online flow works; public TestFlight live; MVP metrics tracked in PostHog | BirdNET+ V3 preview drift; Core ML execution-provider op coverage (CPU fallback); microphone permission UX |
 | 3 — Plant capture | 007 | 4 | 90 % of test photos decided < 10 s online; queued photos resolve on reconnect | Mid-confidence UX; API quota; duplicate-photo farming |
 | 4 — Game layer | 008 | 5 | Reckoning for 10 000 cells < 5 min; App Attest enforced; load test with 200 concurrent walkers passes | Notification fatigue; leaderboard cheating; tile cache invalidation |
-| 5 — Release | 009 | 4 | Approved on the App Store; D7 retention and crash-free tracked | Review guidelines 5.1.5 / 2.5.4; attribution completeness |
+| 5 — Release | 009 | 4 | Approved on the App Store; D7 retention and crash-free tracked; non-commercial models removed from the App Store build (the archive contains no model without `appstore` in its manifest `allowed_builds`, ADR 0011) | Review guidelines 5.1.5 / 2.5.4; attribution completeness |
 | Post-launch | 010, 011 | 3 + TBD | On-device top-3 ≥ 0.8 on the plant eval set; Android beta reusing the API with fixture parity | Dataset licensing; a third rules implementation to keep in parity |
 
 Post-launch ideas, not scheduled: an underdog multiplier (e.g. ×1.25 metres for a faction owning < 20 % of claimed res-7 cells) — the MVP balances only by pre-selecting the smallest faction at sign-up (`docs/territory-rules.md`).

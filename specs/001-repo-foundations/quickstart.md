@@ -99,7 +99,7 @@ xcodebuild test -scheme NatureExplorer -destination 'platform=iOS Simulator,name
 open NatureExplorer.xcodeproj                       # run: five tabs; Map tab shows Kaunas at zoom 12 with a basemap
 ```
 
-The bundle id in `project.yml` is the placeholder `com.natureexplorer.app` (`TODO(owner)`, brand not named yet).
+The bundle id in `project.yml` is `com.natureexplorer.app` (final, owner confirmed 2026-09-07).
 
 Xcode Cloud (after the owner connects the repo): the PR workflow runs `ci_scripts/ci_post_clone.sh` (installs XcodeGen and git-lfs, generates the project, pulls LFS) and the unit tests pass in < 20 min.
 
@@ -143,6 +143,6 @@ Then run `/speckit-analyze` (report in `analysis.md`) and `/speckit-converge` un
 
 ## Owner actions
 
-- `TODO(owner)`: replace the placeholder bundle id `com.natureexplorer.app` in `apps/ios/project.yml` once the brand is named (see `plan.md` "Owner actions").
+- Bundle id `com.natureexplorer.app` confirmed final on 2026-09-07 (T054 done); set `DEVELOPMENT_TEAM` in `apps/ios/project.yml` once the App ID exists.
 - Connect the repository to Xcode Cloud; enable git-lfs.
 - Send the Pl@ntNet Pro inquiry; the Cornell BirdNET V2.4 inquiry is optional until monetisation. Phase 0 exit criteria (`docs/roadmap.md`): `pnpm test` green on GitHub Actions, `xcodebuild test` green on Xcode Cloud, identical fixture results in TS and Swift, `make dev` runs API + DB.

@@ -1,5 +1,5 @@
 {
-  "$comment": "Every model used on device or server (Constitution III). Licence must be permissive for primary-* roles; a non-commercial model may carry role prototype-fallback only while the app is non-commercial (ADR 0006 addendum). files[] lists every artefact ml/scripts/download_models.py fetches into ml/models/cache/<name>/ and verifies; the model-level sha256 is the hash of the file marked primary. Files flagged manual are not downloaded by default. Schema: specs/001-repo-foundations/data-model.md §3; validated by ml/tests/test_manifest.py.",
+  "$comment": "Every model used on device or server (Constitution III v1.1.0, ADR 0011). Licence must be permissive for primary-* roles; a non-commercial model may carry role prototype-fallback only while the app is non-commercial. allowed_builds lists the build types that may bundle the model (debug, testflight, appstore); a non-commercial licence never lists appstore and such models must be removed or licensed before any monetisation. files[] lists every artefact ml/scripts/download_models.py fetches into ml/models/cache/<name>/ and verifies; the model-level sha256 is the hash of the file marked primary. Files flagged manual are not downloaded by default. Schema: specs/001-repo-foundations/data-model.md §3; validated by ml/tests/test_manifest.py.",
   "models": [
     {
       "name": "birdnet-plus-v3-global-10k-pruned-fp16",
@@ -16,6 +16,11 @@
       "sha256": "306e74f3edc5b95acc6e87ea7f3f1c701fdc0b18ec868b7615208cd6fc2f9457",
       "bytes": 66991322,
       "role": "primary-on-device",
+      "allowed_builds": [
+        "debug",
+        "testflight",
+        "appstore"
+      ],
       "notes": "Developer preview: labels and format may change between releases; species are keyed by scientific name. ONNX input 'input' = 32 kHz mono float samples (3 s = 96000; 5 s and 10 s windows also supported), outputs 'predictions' (9,789 classes: birds plus amphibians, mammals and insects) and 'embeddings_out'. Labels CSV is ';'-delimited with header idx;id;sci_name;com_name;class;order. The score-blacklist JSON lists label indices BirdNET Live suppresses. Pinned 2026-09-07 from the git-lfs pointer in birdnet-live-app main (sha256 and size match the downloaded file).",
       "files": [
         {
@@ -52,6 +57,11 @@
       "sha256": "198adb7bcb3cf03341ffa51fbfa7b2d295e5cd900ba09183dcfdbf6d12b5c63b",
       "bytes": 13608653,
       "role": "primary-on-device",
+      "allowed_builds": [
+        "debug",
+        "testflight",
+        "appstore"
+      ],
       "notes": "Gates classifier output by regional presence for the player's actual location (global); also used server-side to build species_region and species_season. ONNX input 'input' = [lat, lon, week] (week 1-48, circular encoding inside the model), output 'probabilities' over the same 9,789 labels as the classifier; BirdNET Live's default presence threshold is 0.03. Labels TXT is tab-separated: id, scientific name, common name. The unpruned 14,082-species FP16 export (different label set) is in the geomodel repo at docs/demo/geomodel_fp16.onnx (tag v3.0.4) and is not used here. Pinned 2026-09-07 from the git-lfs pointer in birdnet-live-app main. The GitHub releases page of birdnet-team/geomodel could not be listed from the agent container (github.com HTML and the releases API are blocked); the raw/media URLs below are reachable.",
       "files": [
         {
@@ -79,15 +89,20 @@
       "attribution": "Google Perch",
       "sample_rate_hz": 32000,
       "window_seconds": 5.0,
-      "sha256": null,
+      "sha256": "c04211da33038176efd299519c398b9486d64a2c1e63fafa4df331600552e556",
       "bytes": 379632720,
       "role": "evaluated-fallback",
-      "notes": "manual download / evaluation only. Not fetched by download_models.py unless --include-manual is passed (Kaggle bundle URL below served a signed redirect without a login on 2026-09-07, but the terms are accepted on the Kaggle model page; Hugging Face mirror google/bird-vocalization-classifier returned 401 through the agent proxy). Classifier head to be sliced to Baltic species before mobile use. Requires LiteRT runtime. Bundle size 379,632,720 bytes (GCS md5 0c08776fbc30640984dcc2fe8447d236). sha256 stays null until the owner downloads and evaluates it in feature 006.",
+      "allowed_builds": [
+        "debug",
+        "testflight",
+        "appstore"
+      ],
+      "notes": "manual download / evaluation only. Not fetched by download_models.py unless --include-manual is passed (Kaggle bundle URL below served a signed redirect without a login on 2026-09-07, but the terms are accepted on the Kaggle model page; Hugging Face mirror google/bird-vocalization-classifier returned 401 through the agent proxy). Classifier head to be sliced to Baltic species before mobile use. Requires LiteRT runtime. Bundle size 379,632,720 bytes (GCS md5 0c08776fbc30640984dcc2fe8447d236). Pinned 2026-09-07 (T055): downloaded through the Kaggle bundle URL with --include-manual and hashed (sha256 above, 379,632,720 bytes); evaluation against ml/eval/birds happens in feature 006.",
       "files": [
         {
           "path": "bird-vocalization-classifier-tensorflow2-perch_v2-v2.tar.gz",
           "url": "https://www.kaggle.com/api/v1/models/google/bird-vocalization-classifier/tensorFlow2/perch_v2/2/download",
-          "sha256": null,
+          "sha256": "c04211da33038176efd299519c398b9486d64a2c1e63fafa4df331600552e556",
           "bytes": 379632720,
           "primary": true,
           "manual": true
@@ -100,14 +115,18 @@
       "version": "2.4",
       "format": "tflite",
       "source": "https://github.com/birdnet-team/BirdNET-Analyzer (models on Zenodo: https://zenodo.org/records/15050749)",
-      "license": "CC-BY-NC-SA-4.0 — NON-COMMERCIAL. Not permitted in release builds without a written licence from Cornell (ccb-birdnet@cornell.edu).",
+      "license": "CC-BY-NC-SA-4.0 — NON-COMMERCIAL. Allowed in Debug/TestFlight builds while the product is non-commercial; forbidden in App Store builds without a written licence from Cornell (ccb-birdnet@cornell.edu).",
       "attribution": "Powered by BirdNET (shared with BirdNET+ V3)",
       "sample_rate_hz": 48000,
       "window_seconds": 3.0,
       "sha256": null,
       "bytes": 53025528,
       "role": "prototype-fallback",
-      "notes": "manual download / non-commercial phase only (ADR 0006 addendum): may run on device and in the server-side verification worker as a fallback while the app is non-commercial; must be removed or licensed from Cornell before any monetisation. BirdNET+ V3 stays primary. Not fetched by download_models.py unless --include-manual is passed; sha256 stays null in feature 001. Zenodo record 15050749 lists BirdNET_v2.4_tflite_fp16.zip (53,025,528 bytes, md5 4cd35da63e442d974faf2121700192b5) containing the FP16 TFLite model and labels; the record metadata says CC BY-NC 4.0 while the BirdNET-Analyzer README says CC BY-NC-SA 4.0 — both are non-commercial, the stricter one is recorded here.",
+      "allowed_builds": [
+        "debug",
+        "testflight"
+      ],
+      "notes": "manual download / non-commercial phase only (ADR 0011, ADR 0006 addendum): may be bundled in Debug and TestFlight builds and run in the server-side verification worker as a fallback while the app is non-commercial (allowed_builds excludes appstore); must be removed or licensed from Cornell before any monetisation. BirdNET+ V3 stays primary. Not fetched by download_models.py unless --include-manual is passed; sha256 stays null in feature 001. Zenodo record 15050749 lists BirdNET_v2.4_tflite_fp16.zip (53,025,528 bytes, md5 4cd35da63e442d974faf2121700192b5) containing the FP16 TFLite model and labels; the record metadata says CC BY-NC 4.0 while the BirdNET-Analyzer README says CC BY-NC-SA 4.0 — both are non-commercial, the stricter one is recorded here.",
       "files": [
         {
           "path": "BirdNET_v2.4_tflite_fp16.zip",

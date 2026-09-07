@@ -83,9 +83,9 @@ Phase 0 output. Decisions already recorded as ADRs are cited, not re-argued. Eve
 - **Rationale**: FR-009 and Constitution III; stdlib-only keeps `ml/` dependency-free until feature 006 adds the eval harness.
 - **Alternatives considered**: `huggingface_hub` / `requests` (extra dependencies for a 100-line script); DVC (heavier than git-lfs for four files).
 
-## R11. ISO week id and time zone handling (deferred)
+## R11. ISO week id and time zone handling
 
-- **Decision**: `weekIdFor(date)` (`YYYY-Www`, ISO week computed in **UTC** — one global cutoff at Monday 00:00 UTC, `RULES.TZ = "UTC"`; only streaks use the player's local zone via `streaks.tz`) is **not** part of 001. It is implemented with `finishWalk` in feature 003 together with a `week-ids.json` fixture, because the four fixtures named in `spec.md` User Story 1 do not include it and adding a fifth would widen the task (Constitution VI).
+- **Decision**: `weekIdFor(date)` (`YYYY-Www`, ISO week computed in **UTC** — one global cutoff at Monday 00:00 UTC, `RULES.TZ = "UTC"`; only streaks use the player's local zone via `streaks.tz`) was originally deferred to feature 003, but the early implementation is **accepted and kept in 001** (decision 2026-09-07, T056): `packages/territory-rules/src/week.ts` and `apps/ios/Packages/TerritoryRules/Sources/TerritoryRules/WeekId.swift` ship with hand-written unit tests in both packages. The shared `week-ids.json` fixture is scheduled as the first task of feature 003 (`finishWalk`), keeping the four fixtures named in `spec.md` User Story 1 unchanged (Constitution VI).
 
 ## R12. Five tabs, not six
 
@@ -96,4 +96,4 @@ Phase 0 output. Decisions already recorded as ADRs are cited, not re-argued. Eve
 1. Connect the GitHub repository to Xcode Cloud in App Store Connect (manual, owner) — until then `xcodebuild test` is run locally on macOS.
 2. Enable git-lfs on the GitHub repository and run the model download script where git-lfs and network exist, then commit the weights (Stream E, or the owner).
 3. Send the two licence inquiry emails drafted by Stream D and record the dates in `docs/licences.md`.
-4. `TODO(owner)`: decide the real bundle identifier / App ID (placeholder `com.natureexplorer.app`; the app is a separate brand the owner has not named yet).
+4. ~~Decide the real bundle identifier / App ID~~ — done: `com.natureexplorer.app` confirmed final by the owner on 2026-09-07.

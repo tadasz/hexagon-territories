@@ -140,7 +140,7 @@ Swift uses the same names in camelCase (`Rules.weeklyCapMPerPlayerPerCell`), `In
 
 ## 3. Model manifest (`ml/models/manifest.json`)
 
-Existing fields are kept; this feature adds `files` and fills `sha256`.
+Existing fields are kept; this feature adds `files` and fills `sha256`. `allowed_builds` was added on 2026-09-07 with Constitution III v1.1.0 (ADR 0011).
 
 ```jsonc
 {
@@ -160,7 +160,8 @@ Existing fields are kept; this feature adds `files` and fills `sha256`.
       "inputs": "latitude, longitude, week",               // optional free text for non-audio models
       "labels_file": "labels/birdnet-plus-v3-global-10k.txt",   // relative to ml/models/, optional
       "sha256": "…64 hex…" | null,                         // hash of the primary weights file; null = not yet downloaded
-      "role": "primary-on-device" | "primary-server" | "evaluated-fallback" | "prototype-fallback" | "evaluation-only",   // prototype-fallback: non-commercial phase only (ADR 0006 addendum)
+      "role": "primary-on-device" | "primary-server" | "evaluated-fallback" | "prototype-fallback" | "evaluation-only",   // prototype-fallback: non-commercial phase only (ADR 0006 addendum, ADR 0011)
+      "allowed_builds": ["debug", "testflight", "appstore"],   // non-empty subset; a non-commercial licence never lists "appstore" (ADR 0011)
       "notes": "...",
       "files": [                                           // NEW: every artefact to download/verify
         { "path": "birdnet-plus-v3-global-10k-pruned-fp16.onnx", "url": "https://...", "sha256": "…" | null, "bytes": 12345678 | null, "primary": true },
@@ -171,7 +172,7 @@ Existing fields are kept; this feature adds `files` and fills `sha256`.
 }
 ```
 
-Validation (`ml/tests/test_manifest.py`): unique names; `role` in the enum; audio models have `sample_rate_hz` and `window_seconds`; exactly one `primary: true` file per model whose `sha256` equals the model-level `sha256`; any model with `role` starting with `primary-` has a licence string without `NC`/`NON-COMMERCIAL`; every `labels_file` referenced exists once downloaded.
+Validation (`ml/tests/test_manifest.py`): unique names; `role` in the enum; audio models have `sample_rate_hz` and `window_seconds`; exactly one `primary: true` file per model whose `sha256` equals the model-level `sha256`; any model with `role` starting with `primary-` has a licence string without `NC`/`NON-COMMERCIAL`; `allowed_builds` is a non-empty subset of `debug`/`testflight`/`appstore` on every model; a model whose licence contains `NC`/`NonCommercial` never lists `appstore` and never has a `primary-*` role; every `labels_file` referenced exists once downloaded.
 
 ---
 
