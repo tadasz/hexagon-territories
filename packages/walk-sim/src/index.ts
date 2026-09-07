@@ -1,6 +1,9 @@
 export type {
   ErrorEnvelope,
+  FlipPreview,
   LineString,
+  ReckoningQueued,
+  ReckoningRunResult,
   SampleBatchResult,
   WalkCreated,
   WalkHex,
@@ -11,6 +14,13 @@ export { expected, type Expected } from './expected.js';
 export { HINTS_NAMESPACE, parseGpx, renderGpx, type RenderGpxOptions } from './gpx.js';
 export { parseGeoJson } from './geojson.js';
 export { gaussian, mulberry32 } from './random.js';
+export {
+  ApiError,
+  formatReckonResult,
+  reckon,
+  type ReckonOptions,
+  type ReckonResult,
+} from './reckon.js';
 export {
   BATCH_WINDOW_MS,
   MAX_BATCH_SIZE,

@@ -1,9 +1,33 @@
+import { RULES } from '@nature/territory-rules';
 import { describe, expect, it } from 'vitest';
-import { STANDING_STRENGTH_WEIGHT, computeStanding } from '../../src/modules/walks/standing.js';
+import { leaderOf, pressureOf } from '../../src/modules/territory/pressure.js';
+import { computeStanding } from '../../src/modules/walks/standing.js';
 
 describe('week standing read model (research.md R8)', () => {
-  it("uses half of last reckoning's strength", () => {
-    expect(STANDING_STRENGTH_WEIGHT).toBe(0.5);
+  it("uses the territory module's pressure (strength × DECAY) instead of a local weight", () => {
+    // feature 004 (T012): the weight lives in RULES.DECAY, read by pressureOf
+    const pressure = pressureOf([
+      { factionId: 2, strength: 3000, cappedMeters: 0, bonusMeters: 0 },
+    ]);
+    expect(pressure.scores.get(2)).toBe(3000 * RULES.DECAY);
+    expect(RULES.DECAY).toBe(0.5);
+  });
+
+  it('agrees with leaderOf(pressureScores) for the same rows', () => {
+    const rows = [
+      { factionId: 1, strength: 100, cappedMeters: 50, bonusMeters: 0 },
+      { factionId: 2, strength: 3000, cappedMeters: 0, bonusMeters: 0 },
+      { factionId: 3, strength: 0, cappedMeters: 400, bonusMeters: 300 },
+    ];
+    const pressure = pressureOf(rows);
+    const standing = computeStanding(
+      pressure.factions.map((f) => ({ factionId: f.factionId, score: f.score })),
+      1,
+      2,
+    );
+    expect(standing.leader).toBe(leaderOf(pressure.scores));
+    expect(standing.leader).toBe(2);
+    expect(standing.myFactionShare).toBeCloseTo(100 / (100 + 1500 + 700), 3);
   });
 
   it("picks the highest score as leader and the caller's share of the total", () => {

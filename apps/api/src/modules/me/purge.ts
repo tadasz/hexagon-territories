@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import { accountExports } from '../../db/schema/index.js';
 import type { ObjectStorage } from '../../lib/storage.js';
+import { leaderboardPurgeStep, territoryPurgeStep } from '../territory/purge.js';
 import { walksPurgeStep } from '../walks/purge.js';
 
 /** The transaction handle the steps run in. */
@@ -45,9 +46,11 @@ async function runDelete(tx: PurgeTx, table: string, column: string, userId: str
  * leaderboards) have nothing written yet, so they are plain deletes here; the feature that
  * starts writing a table replaces its step (delete or anonymise) as needed — feature 003
  * registers `walks` (`modules/walks/purge.ts`: ledger, anti-cheat flags, contributions, walks
- * with their samples and hex metres). `users` is last: `refresh_tokens`, `devices`,
- * `user_species`, `streaks` and `account_exports` cascade from it; `hex_state.captain_user_id`
- * is `SET NULL`.
+ * with their samples and hex metres); feature 004 replaces the `leaderboard_snapshots` delete
+ * with an anonymising step and adds `territory` (captain references, queued result pushes —
+ * `modules/territory/purge.ts`). `users` is last: `refresh_tokens`, `devices`, `user_species`,
+ * `streaks` and `account_exports` cascade from it; `hex_state.captain_user_id` and the history's
+ * captain columns are `SET NULL`.
  */
 export const PURGE_STEPS: readonly PurgeStep[] = [
   {
@@ -59,7 +62,8 @@ export const PURGE_STEPS: readonly PurgeStep[] = [
   deleteStep('devices', 'devices'),
   walksPurgeStep,
   deleteStep('captures', 'captures'),
-  deleteStep('leaderboard_snapshots', 'leaderboard_snapshots'),
+  leaderboardPurgeStep,
+  territoryPurgeStep,
   deleteStep('users', 'users', 'id'),
 ];
 

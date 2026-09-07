@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
@@ -10,6 +11,7 @@ import {
   smallint,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { ledgerKindEnum } from './enums.js';
@@ -36,6 +38,11 @@ export const pointsLedger = pgTable(
     index('points_ledger_user_created_idx').on(t.userId, t.createdAt.desc()),
     index('points_ledger_week_faction_idx').on(t.weekId, t.factionId),
     index('points_ledger_h3_r9_idx').on(t.h3R9),
+    // feature 004: flip XP is awarded once per (player, ownership event) even when a reckoning
+    // batch is retried (specs/004-weekly-reckoning/research.md R5).
+    uniqueIndex('points_ledger_hex_flip_unique')
+      .on(t.userId, t.refId)
+      .where(sql`kind = 'hex_flip'`),
   ],
 );
 
@@ -55,6 +62,10 @@ export const streaks = pgTable('streaks', {
 
 export type LeaderboardScope = 'global' | 'faction' | 'hex_r7';
 
+/**
+ * Weekly boards frozen by the reckoning's rollup stage. `user_id` is nullable since feature 004:
+ * erasing an account anonymises the row (rank and metres kept) instead of deleting it.
+ */
 export const leaderboardSnapshots = pgTable(
   'leaderboard_snapshots',
   {
@@ -62,9 +73,7 @@ export const leaderboardSnapshots = pgTable(
     scope: text('scope').$type<LeaderboardScope>().notNull(),
     scopeId: text('scope_id').notNull().default(''),
     rank: integer('rank').notNull(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id),
+    userId: uuid('user_id').references(() => users.id),
     meters: real('meters').notNull().default(0),
     points: integer('points').notNull().default(0),
     computedAt: timestamp('computed_at', { withTimezone: true }).notNull().defaultNow(),

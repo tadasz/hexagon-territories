@@ -1,5 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
+import { TERRITORY_LIMITS } from './modules/territory/limits.js';
 import { WALK_LIMITS } from './modules/walks/limits.js';
 import { StringEnum } from './schemas/common.js';
 
@@ -16,7 +17,8 @@ export const JWT_SECRET_MIN_LENGTH = 32;
  * Every environment variable the API reads, with its type, constraints and default. Values arrive
  * as strings; `loadConfig` converts them (`"3000"` -> 3000, `"false"` -> false) before validation.
  * Feature 002 adds the `JWT_*`, `APPLE_*`, account and rate-limit variables (data-model.md §7);
- * feature 003 adds the `WALK_*` limits.
+ * feature 003 adds the `WALK_*` limits; feature 004 the reckoning/hex read variables
+ * (specs/004-weekly-reckoning/data-model.md §6).
  */
 export const EnvSchema = Type.Object({
   NODE_ENV: StringEnum(NODE_ENVS, { default: 'development' }),
@@ -75,6 +77,17 @@ export const EnvSchema = Type.Object({
     default: WALK_LIMITS.BATCHES_PER_WINDOW,
   }),
   WALK_SAMPLES_PER_DAY: Type.Integer({ minimum: 1, default: WALK_LIMITS.SAMPLES_PER_DAY }),
+  // Weekly reckoning (specs/004-weekly-reckoning/data-model.md §6); defaults equal modules/territory/limits.ts.
+  RECKONING_BATCH_SIZE: Type.Integer({
+    minimum: 1,
+    default: TERRITORY_LIMITS.RECKONING_BATCH_SIZE,
+  }),
+  HEX_BBOX_MAX_CELLS: Type.Integer({ minimum: 1, default: TERRITORY_LIMITS.HEX_BBOX_MAX_CELLS }),
+  RECKONING_CONSISTENCY_CRON: Type.String({
+    minLength: 9,
+    default: TERRITORY_LIMITS.RECKONING_CONSISTENCY_CRON,
+    description: 'Five-field cron (UTC) of the nightly parent consistency check',
+  }),
 });
 
 export type Env = Static<typeof EnvSchema>;
@@ -122,6 +135,12 @@ export interface AppConfig {
     xpDailyCap: number;
     ingestBatchesPer15Min: number;
     samplesPerDay: number;
+  };
+  /** Weekly reckoning and hex read model (feature 004). */
+  territory: {
+    batchSize: number;
+    bboxMaxCells: number;
+    consistencyCron: string;
   };
 }
 
@@ -220,6 +239,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       xpDailyCap: converted.WALK_XP_DAILY_CAP,
       ingestBatchesPer15Min: converted.WALK_INGEST_BATCHES_PER_15MIN,
       samplesPerDay: converted.WALK_SAMPLES_PER_DAY,
+    },
+    territory: {
+      batchSize: converted.RECKONING_BATCH_SIZE,
+      bboxMaxCells: converted.HEX_BBOX_MAX_CELLS,
+      consistencyCron: converted.RECKONING_CONSISTENCY_CRON,
     },
   };
 }

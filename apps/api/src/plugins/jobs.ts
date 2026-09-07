@@ -21,7 +21,9 @@ export interface JobsPluginOptions {
   retryMs?: number;
   /** Job dependencies beyond the Fastify decorators (`db`, `storage`, `log`). */
   clock?: Clock;
-  config: Pick<AppConfig, 'account' | 'jwt' | 'walks'>;
+  config: Pick<AppConfig, 'account' | 'jwt' | 'walks' | 'territory'>;
+  /** Run the missed weekly reckonings once after registration (default true; tests opt out). */
+  catchUp?: boolean;
 }
 
 declare module 'fastify' {
@@ -66,10 +68,12 @@ export const jobsPlugin = fp<JobsPluginOptions>(
         await boss.start();
         await registerJobs(boss, {
           db: fastify.db,
+          pool: fastify.pg,
           storage: fastify.storage,
           clock: opts.clock ?? systemClock,
           log: fastify.log,
           config: opts.config,
+          ...(opts.catchUp !== undefined ? { catchUp: opts.catchUp } : {}),
         });
         fastify.jobsStarted = true;
         fastify.log.info('pg-boss started');

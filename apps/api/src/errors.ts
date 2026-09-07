@@ -1,7 +1,7 @@
 /**
  * Stable, machine-readable error codes shared with the iOS client (contracts/openapi.yaml of
- * features 001, 002 and 003; specs/002-auth-and-factions/data-model.md §2.6,
- * specs/003-walk-tracking/data-model.md §2.5).
+ * features 001–004; specs/002-auth-and-factions/data-model.md §2.6,
+ * specs/003-walk-tracking/data-model.md §2.5, specs/004-weekly-reckoning/data-model.md §2.5).
  */
 export const ERROR_CODES = {
   VALIDATION_FAILED: 'VALIDATION_FAILED',
@@ -28,6 +28,13 @@ export const ERROR_CODES = {
   FACTION_REQUIRED: 'FACTION_REQUIRED',
   INVALID_ENDED_AT: 'INVALID_ENDED_AT',
   SAMPLE_QUOTA_EXCEEDED: 'SAMPLE_QUOTA_EXCEEDED',
+  // feature 004 (specs/004-weekly-reckoning/data-model.md §2.5)
+  BBOX_TOO_LARGE: 'BBOX_TOO_LARGE',
+  WEEK_NOT_ENDED: 'WEEK_NOT_ENDED',
+  RECKONING_OUT_OF_ORDER: 'RECKONING_OUT_OF_ORDER',
+  RECKONING_RUNNING: 'RECKONING_RUNNING',
+  RECKONING_NOT_FOUND: 'RECKONING_NOT_FOUND',
+  JOBS_DISABLED: 'JOBS_DISABLED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

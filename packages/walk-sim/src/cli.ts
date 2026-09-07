@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { Command, InvalidArgumentError, type Command as CommandType } from 'commander';
 import { expected } from './expected.js';
+import { ApiError, formatReckonResult, reckon } from './reckon.js';
 import { ReplayError, replay } from './replay.js';
 import { generateSampleFiles } from './sample-tracks.js';
 import { deltaToEndAt, shiftSamples, simulate, type SimulateOptions } from './simulate.js';
@@ -199,6 +200,65 @@ export function buildProgram(): CommandType {
       }
     },
   );
+
+  program
+    .command('reckon')
+    .argument('<weekId>', 'ISO week in UTC, e.g. 2026-W37')
+    .description(
+      'Run (or preview) the weekly reckoning of one week through the admin endpoint (needs an admin token)',
+    )
+    .requiredOption('--base-url <url>', 'API base URL, e.g. http://localhost:3000')
+    .requiredOption('--token <token>', 'bearer access token of a player with role admin')
+    .option('--dry-run', 'print the flips the reckoning would make and write nothing')
+    .option('--async', 'enqueue the job instead of running it in the request (202)')
+    .option('--json', 'print the raw result as JSON')
+    .action(
+      async (
+        weekId: string,
+        flags: {
+          baseUrl: string;
+          token: string;
+          dryRun?: boolean;
+          async?: boolean;
+          json?: boolean;
+        },
+      ) => {
+        if (!/^\d{4}-W\d{2}$/.test(weekId)) {
+          process.stderr.write(`weekId must be YYYY-Www, got "${weekId}"\n`);
+          process.exitCode = 2;
+          return;
+        }
+        if (flags.dryRun && flags.async) {
+          process.stderr.write(
+            '--dry-run cannot be combined with --async (a dry run answers synchronously)\n',
+          );
+          process.exitCode = 2;
+          return;
+        }
+        try {
+          const result = await reckon({
+            baseUrl: flags.baseUrl,
+            token: flags.token,
+            weekId,
+            dryRun: flags.dryRun === true,
+            sync: flags.async !== true,
+          });
+          if (flags.json) {
+            print(result);
+            return;
+          }
+          process.stdout.write(`${formatReckonResult(result).join('\n')}\n`);
+        } catch (err) {
+          if (err instanceof ApiError) {
+            process.stderr.write(`${err.code} (${String(err.status)})\n`);
+            process.stderr.write(`${JSON.stringify(err.body, null, 2)}\n`);
+            process.exitCode = 1;
+            return;
+          }
+          throw err;
+        }
+      },
+    );
 
   program
     .command('samples:generate')

@@ -43,6 +43,7 @@ describe('loadConfig', () => {
         ingestBatchesPer15Min: 30,
         samplesPerDay: 8640,
       },
+      territory: { batchSize: 1000, bboxMaxCells: 3000, consistencyCron: '15 3 * * *' },
     });
   });
 
@@ -69,6 +70,14 @@ describe('loadConfig', () => {
       WALK_XP_DAILY_CAP: '50',
       WALK_INGEST_BATCHES_PER_15MIN: '100',
       WALK_SAMPLES_PER_DAY: '20000',
+      RECKONING_BATCH_SIZE: '3',
+      HEX_BBOX_MAX_CELLS: '50',
+      RECKONING_CONSISTENCY_CRON: '0 4 * * *',
+    });
+    expect(config.territory).toEqual({
+      batchSize: 3,
+      bboxMaxCells: 50,
+      consistencyCron: '0 4 * * *',
     });
     expect(config.walks).toEqual({
       autofinishAfterH: 6,

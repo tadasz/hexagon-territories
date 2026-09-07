@@ -10,6 +10,8 @@ import { authRoutes } from './modules/auth/routes.js';
 import { factionsRoutes } from './modules/factions/routes.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { meRoutes } from './modules/me/routes.js';
+import { adminReckoningRoutes } from './modules/territory/admin-routes.js';
+import { territoryRoutes } from './modules/territory/routes.js';
 import { walksRoutes } from './modules/walks/routes.js';
 import { authPlugin, type AuthUserSource } from './plugins/auth.js';
 import { dbPlugin } from './plugins/db.js';
@@ -28,8 +30,11 @@ export interface BuildAppOptions {
   pool?: Pool;
   /** Override the readiness probe (unit tests). */
   dbPing?: () => Promise<void>;
-  /** Job wiring: `false` disables pg-boss regardless of config; an object injects a fake boss. */
-  jobs?: false | { boss?: JobBoss; retryMs?: number };
+  /**
+   * Job wiring: `false` disables pg-boss regardless of config; an object injects a fake boss.
+   * `catchUp: false` skips the start-up reckoning catch-up (integration tests seed their own weeks).
+   */
+  jobs?: false | { boss?: JobBoss; retryMs?: number; catchUp?: boolean };
   /** Object storage; defaults to S3 from config (tests inject `MemoryObjectStorage`). */
   storage?: ObjectStorage;
   /** Time source for tokens, locks, purge and export windows (tests inject `FakeClock`). */
@@ -119,10 +124,13 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(factionsRoutes, { clock });
   await app.register(meRoutes, { config, clock });
   await app.register(walksRoutes, { config, clock });
+  await app.register(territoryRoutes, { config, clock });
+  await app.register(adminReckoningRoutes, { config, clock });
   await app.register(jobsPlugin, {
     enabled: opts.jobs !== false && config.jobsEnabled,
     boss: opts.jobs === false ? undefined : opts.jobs?.boss,
     retryMs: opts.jobs === false ? undefined : opts.jobs?.retryMs,
+    catchUp: opts.jobs === false ? undefined : opts.jobs?.catchUp,
     clock,
     config,
   });

@@ -20,6 +20,10 @@ pnpm --filter @nature/walk-sim walk-sim replay packages/walk-sim/samples/azuolyn
 
 # Regenerate the checked-in sample tracks (byte-identical; refuses when an assertion fails)
 pnpm --filter @nature/walk-sim samples:generate
+
+# Reckon a week that has ended through the admin endpoint (feature 004; the token needs role admin)
+pnpm --filter @nature/walk-sim walk-sim reckon 2026-W37 --base-url http://localhost:3000 --token "$TOKEN_ADMIN" --dry-run   # prints the flips, writes nothing
+pnpm --filter @nature/walk-sim walk-sim reckon 2026-W37 --base-url http://localhost:3000 --token "$TOKEN_ADMIN"             # runs it
 ```
 
 `pnpm --filter @nature/walk-sim walk-sim …` runs `src/cli.ts` through `tsx` (add `--silent`
@@ -34,6 +38,7 @@ there). A relative track path is resolved against the directory pnpm was invoked
 | `dry-run <file>`   | distortion flags below; `--json`                                                                                                                                                                                                                                                                                          |
 | `replay <file>`    | `--base-url <url>` `--token <jwt>` (required); `--no-finish`; `--rate <n>` (0 = as fast as possible, default; 1 = real time; N = N× faster — batches are sent when the simulated clock passes each 60 s window, like the app's outbox); `--batch-size <n>` (≤ 200); `--client-walk-id <uuid>`; `--json`; distortion flags |
 | `samples:generate` | `--dir <dir>`                                                                                                                                                                                                                                                                                                             |
+| `reckon <weekId>`  | `--base-url <url>` `--token <jwt>` (required; **an admin token** — `UPDATE users SET role = 'admin'`); `--dry-run` (print the would-be flips, write nothing; always synchronous); `--async` (enqueue the job, answer 202); `--json`. Exit 0 on success, 1 on an API error (prints the code, e.g. `FORBIDDEN`, `WEEK_NOT_ENDED`, `RECKONING_OUT_OF_ORDER`), 2 on bad arguments |
 
 Distortion flags (both commands): `--speed <m/s>` (resample at a constant pace; default: the
 track's own timestamps, else 1.4), `--jitter <m>` (Gaussian σ, seeded), `--accuracy <m>` (reported

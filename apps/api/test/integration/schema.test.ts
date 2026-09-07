@@ -31,6 +31,9 @@ const EXPECTED_TABLES = [
   'anti_cheat_flags',
   // feature 002
   'account_exports',
+  // feature 004
+  'hex_reckoning_history',
+  'reckoning_consistency',
 ];
 
 const EXPECTED_ENUMS = [
@@ -161,6 +164,117 @@ describeWithDb('schema migration (data-model.md §4)', () => {
     console.info(
       'feature 003 schema: walk_sessions finish columns + walk_sessions_active_started_idx present',
     );
+  });
+
+  it('migration 0005 adds the reckoning resume state, history, consistency and the flip-XP index', async () => {
+    const columns = await tdb.pool.query<{
+      column_name: string;
+      data_type: string;
+      column_default: string | null;
+      is_nullable: string;
+    }>(
+      `select column_name, data_type, column_default, is_nullable from information_schema.columns
+       where table_name = 'reckonings' order by ordinal_position`,
+    );
+    expect(columns.rows.map((row) => row.column_name)).toEqual([
+      'week_id',
+      'started_at',
+      'finished_at',
+      'hexes_processed',
+      'flips',
+      'status',
+      'stage',
+      'cursor_h3_r9',
+      'batches',
+      'parent_flips',
+      'walks_autofinished',
+      'push_queued',
+      'error',
+      'attempt',
+    ]);
+    expect(columns.rows.find((row) => row.column_name === 'stage')).toMatchObject({
+      data_type: 'text',
+      column_default: "'walks'::text",
+      is_nullable: 'NO',
+    });
+    expect(columns.rows.find((row) => row.column_name === 'attempt')).toMatchObject({
+      column_default: '1',
+      is_nullable: 'NO',
+    });
+    expect(columns.rows.find((row) => row.column_name === 'cursor_h3_r9')).toMatchObject({
+      data_type: 'bigint',
+      is_nullable: 'YES',
+    });
+
+    const history = await tdb.pool.query<{ column_name: string }>(
+      `select column_name from information_schema.columns
+       where table_name = 'hex_reckoning_history' order by ordinal_position`,
+    );
+    expect(history.rows.map((row) => row.column_name)).toEqual([
+      'h3_r9',
+      'week_id',
+      'owner_faction_id',
+      'flipped',
+      'from_faction',
+      'to_faction',
+      'captain_user_id',
+      'captain_before_user_id',
+      'strengths',
+      'had_contributions',
+      'reckoned_at',
+    ]);
+    const captainFks = await tdb.pool.query<{ column_name: string; delete_rule: string }>(
+      `select kcu.column_name, rc.delete_rule
+       from information_schema.referential_constraints rc
+       join information_schema.table_constraints tc on tc.constraint_name = rc.constraint_name
+       join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name
+       where tc.table_name = 'hex_reckoning_history' and kcu.column_name like 'captain%'
+       order by kcu.column_name`,
+    );
+    expect(captainFks.rows).toEqual([
+      { column_name: 'captain_before_user_id', delete_rule: 'SET NULL' },
+      { column_name: 'captain_user_id', delete_rule: 'SET NULL' },
+    ]);
+
+    const nullable = await tdb.pool.query<{ is_nullable: string }>(
+      `select is_nullable from information_schema.columns
+       where table_name = 'leaderboard_snapshots' and column_name = 'user_id'`,
+    );
+    expect(nullable.rows).toEqual([{ is_nullable: 'YES' }]);
+
+    const indexes = await tdb.pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes where indexname in (
+         'points_ledger_hex_flip_unique', 'hex_reckoning_history_captain_before_idx',
+         'hex_reckoning_history_week_idx', 'hex_state_last_reckoned_idx')
+       order by indexname`,
+    );
+    const byName = Object.fromEntries(indexes.rows.map((row) => [row.indexname, row.indexdef]));
+    expect(Object.keys(byName)).toEqual([
+      'hex_reckoning_history_captain_before_idx',
+      'hex_reckoning_history_week_idx',
+      'hex_state_last_reckoned_idx',
+      'points_ledger_hex_flip_unique',
+    ]);
+    expect(byName.points_ledger_hex_flip_unique).toMatch(/^CREATE UNIQUE INDEX/);
+    expect(byName.points_ledger_hex_flip_unique).toMatch(
+      /\(user_id, ref_id\) WHERE \(kind = 'hex_flip'::ledger_kind\)/,
+    );
+    expect(byName.hex_reckoning_history_captain_before_idx).toMatch(
+      /\(week_id, captain_before_user_id\) WHERE flipped/,
+    );
+    const consistency = await tdb.pool.query<{ column_name: string }>(
+      `select column_name from information_schema.columns
+       where table_name = 'reckoning_consistency' order by ordinal_position`,
+    );
+    expect(consistency.rows.map((row) => row.column_name)).toEqual([
+      'id',
+      'ran_at',
+      'parents_checked',
+      'drifted',
+      'repaired',
+      'sample',
+    ]);
+    console.info('feature 004 schema: reckonings resume columns + hex_reckoning_history present');
   });
 
   it('partitions location_samples by range on ts with a default and monthly partitions', async () => {

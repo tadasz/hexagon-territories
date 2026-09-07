@@ -32,6 +32,11 @@ const EXPECTED_OPERATIONS: Record<string, Record<string, string>> = {
   '/v1/walks/{id}/samples': { post: 'uploadWalkSamples' },
   '/v1/walks/{id}/finish': { post: 'finishWalk' },
   '/v1/walks/{id}': { get: 'getWalk' },
+  // feature 004
+  '/v1/hexes': { get: 'listHexes' },
+  '/v1/hexes/{h3}': { get: 'getHex' },
+  '/v1/reckonings/latest': { get: 'getLatestReckoning' },
+  '/v1/admin/reckonings/{weekId}': { post: 'runReckoning', get: 'getReckoning' },
 };
 
 const EXPECTED_SCHEMAS = [
@@ -65,6 +70,23 @@ const EXPECTED_SCHEMAS = [
   'WalkSummary',
   'WalkListItem',
   'WalkListPage',
+  // feature 004
+  'HexListItem',
+  'HexList',
+  'FactionStrength',
+  'HexWeekFaction',
+  'HexWeek',
+  'HexCaptain',
+  'HexMe',
+  'HexReckoningEntry',
+  'HexDetail',
+  'FactionTotal',
+  'ReckoningLatest',
+  'ReckoningRunRequest',
+  'FlipPreview',
+  'ReckoningRunResult',
+  'ReckoningQueued',
+  'ReckoningStatus',
 ];
 
 describe('GET /openapi.json', () => {
@@ -127,6 +149,17 @@ describe('GET /openapi.json', () => {
           'walks',
         ]);
       }
+    }
+    // feature 004: territory reads need a token; admin routes are tagged admin
+    for (const [path, method, tag] of [
+      ['/v1/hexes', 'get', 'territory'],
+      ['/v1/hexes/{h3}', 'get', 'territory'],
+      ['/v1/reckonings/latest', 'get', 'territory'],
+      ['/v1/admin/reckonings/{weekId}', 'post', 'admin'],
+      ['/v1/admin/reckonings/{weekId}', 'get', 'admin'],
+    ] as const) {
+      expect(security(path, method), `${method} ${path}`).toEqual([{ bearerAuth: [] }]);
+      expect((doc.paths[path]?.[method] as { tags?: string[] } | undefined)?.tags).toEqual([tag]);
     }
     expect(security('/v1/auth/apple', 'post')).toEqual([]);
     expect(security('/v1/auth/refresh', 'post')).toEqual([]);
@@ -246,6 +279,69 @@ describe('GET /openapi.json', () => {
     expect(JSON.stringify(doc.components.schemas.WalkSummary)).toContain(
       '#/components/schemas/LineString',
     );
+  });
+
+  it('describes the territory and admin operations as the 004 contract does (SC-008)', () => {
+    expect(Object.keys(doc.paths['/v1/hexes']?.get?.responses ?? {})).toEqual([
+      '200',
+      '400',
+      '401',
+      '429',
+    ]);
+    expect(Object.keys(doc.paths['/v1/hexes/{h3}']?.get?.responses ?? {})).toEqual([
+      '200',
+      '400',
+      '401',
+    ]);
+    expect(Object.keys(doc.paths['/v1/reckonings/latest']?.get?.responses ?? {})).toEqual([
+      '200',
+      '401',
+    ]);
+    expect(Object.keys(doc.paths['/v1/admin/reckonings/{weekId}']?.post?.responses ?? {})).toEqual([
+      '200',
+      '202',
+      '400',
+      '401',
+      '403',
+      '409',
+      '503',
+    ]);
+    expect(Object.keys(doc.paths['/v1/admin/reckonings/{weekId}']?.get?.responses ?? {})).toEqual([
+      '200',
+      '401',
+      '403',
+      '404',
+    ]);
+    expect(doc.components.schemas.HexListItem?.required).toEqual([
+      'h3',
+      'res',
+      'owner',
+      'ownerSince',
+      'pressureLeader',
+      'contested',
+    ]);
+    expect(doc.components.schemas.ReckoningLatest?.required).toEqual([
+      'weekId',
+      'ranAt',
+      'nextAt',
+      'inProgress',
+      'factionTotals',
+      'myFlips',
+      'myFlippedHexes',
+    ]);
+    expect(JSON.stringify(doc.components.schemas.HexDetail)).toContain(
+      '#/components/schemas/HexCaptain',
+    );
+    expect(JSON.stringify(doc.paths['/v1/hexes']?.get?.responses)).toContain(
+      '#/components/schemas/HexList',
+    );
+    expect(JSON.stringify(doc.paths['/v1/admin/reckonings/{weekId}']?.post?.responses)).toContain(
+      '#/components/schemas/ReckoningQueued',
+    );
+    const owner = (
+      doc.components.schemas.HexListItem as { properties?: Record<string, { type?: unknown }> }
+    ).properties?.owner;
+    expect([...(owner?.type as string[])].sort()).toEqual(['integer', 'null']);
   });
 
   it('exposes the shared Error and HealthResponse component schemas', () => {

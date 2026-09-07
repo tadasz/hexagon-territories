@@ -70,7 +70,8 @@ export async function createIntegrationHarness(
         }
       : false,
     pool: tdb.pool,
-    jobs: { boss: asJobBoss(boss) },
+    // No start-up reckoning catch-up: suites seed and reckon their own weeks explicitly.
+    jobs: { boss: asJobBoss(boss), catchUp: false },
     storage,
     clock,
     ...opts.app,

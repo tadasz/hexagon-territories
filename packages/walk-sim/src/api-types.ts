@@ -57,6 +57,37 @@ export interface WalkSummary {
   path: LineString | null;
 }
 
+/** Feature 004 (specs/004-weekly-reckoning/contracts/openapi.yaml): the admin reckoning endpoint. */
+export interface FlipPreview {
+  h3: string;
+  from: number | null;
+  to: number | null;
+}
+
+export interface ReckoningRunResult {
+  weekId: string;
+  dryRun: boolean;
+  status: 'done';
+  resumed: boolean;
+  hexesProcessed: number;
+  flips: number;
+  parentFlips: number;
+  walksAutofinished: number;
+  staleWalksSkipped: number;
+  pushQueued: number;
+  leaderboardRows: number;
+  durationMs: number;
+  startedAt: string;
+  finishedAt: string;
+  flipsPreview: FlipPreview[];
+}
+
+export interface ReckoningQueued {
+  weekId: string;
+  status: 'queued';
+  jobId: string;
+}
+
 export interface ErrorEnvelope {
   error: { code: string; message: string; details?: Record<string, unknown> };
   requestId: string;

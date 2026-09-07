@@ -4,6 +4,7 @@ import type { Db } from '../../db/client.js';
 import { factions, refreshTokens, users } from '../../db/schema/index.js';
 import { addDays } from '../../lib/time.js';
 import { DateTime, Nullable, StringEnum } from '../../schemas/common.js';
+import { territoryExportSection } from '../territory/export-section.js';
 import { pointsExportSection, walksExportSection } from '../walks/export-section.js';
 import { USER_ROLES } from './schemas.js';
 
@@ -57,7 +58,7 @@ const SessionSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** Shape of the bundle produced by feature 002 (feature 003 adds `walks` and `points`). */
+/** Shape of the bundle produced by feature 002 (003 adds `walks` and `points`, 004 `territory`). */
 export const ExportBundleSchema = Type.Object(
   {
     exportVersion: Type.Literal(EXPORT_VERSION),
@@ -132,6 +133,8 @@ export const EXPORT_SECTIONS: readonly ExportSection[] = [
   // feature 003 (modules/walks/export-section.ts)
   walksExportSection,
   pointsExportSection,
+  // feature 004 (modules/territory/export-section.ts)
+  territoryExportSection,
 ];
 
 export function validateExportSections(sections: readonly ExportSection[] = EXPORT_SECTIONS): void {

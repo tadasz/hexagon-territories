@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
+import { describe, expect, it, vi } from 'vitest';
 import type { App } from '../../src/app.js';
+import type { Db, Pool } from '../../src/db/client.js';
 import {
   RECKONING_CRON,
   RECKONING_WEEKLY,
@@ -8,8 +9,17 @@ import {
   runReckoningWeekly,
   type JobScheduler,
 } from '../../src/jobs/reckoning-weekly.js';
+import type * as RunModule from '../../src/modules/territory/reckoning/run.js';
+import type { ReckoningDeps } from '../../src/modules/territory/reckoning/run.js';
 import type { JobBoss } from '../../src/plugins/jobs.js';
 import { buildUnitApp, testConfig } from '../helpers/app.js';
+import { FakeClock } from '../helpers/clock.js';
+
+const run = vi.hoisted(() => ({ runReckoning: vi.fn(), runDueReckonings: vi.fn() }));
+vi.mock('../../src/modules/territory/reckoning/run.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RunModule>();
+  return { ...actual, ...run };
+});
 
 type Handler = (jobs: Array<{ id: string; name: string; data: unknown }>) => Promise<unknown>;
 
@@ -37,6 +47,7 @@ function fakeBoss() {
     on: vi.fn(),
     createQueue: vi.fn(() => Promise.resolve()),
     schedule: vi.fn(() => Promise.resolve()),
+    send: vi.fn(() => Promise.resolve('job-1')),
     work: vi.fn((name: string, handler: Handler) => {
       handlers.set(name, handler);
       return Promise.resolve(`worker-${name}`);
@@ -46,39 +57,67 @@ function fakeBoss() {
   return boss;
 }
 
+function deps(log = fakeLogger()): ReckoningDeps {
+  return {
+    db: null as unknown as Db,
+    pool: null as unknown as Pool,
+    boss: null,
+    clock: new FakeClock('2026-09-07T00:00:30.000Z'),
+    log,
+    batchSize: 1000,
+  };
+}
+
+const done = (weekId: string) => ({ weekId, status: 'done', flips: 2 });
+
 describe('reckoning.weekly', () => {
   it('uses the constant from docs/territory-rules.md (Monday 00:00 UTC)', () => {
     expect(RECKONING_WEEKLY).toBe('reckoning.weekly');
     expect(RECKONING_CRON).toBe('0 0 * * 1');
   });
 
-  it('creates the queue, schedules it in UTC and attaches a worker', async () => {
+  it('creates the queue, schedules it in UTC as a singleton and attaches a worker', async () => {
     const boss = fakeBoss();
     const log = fakeLogger();
-    await registerReckoningWeekly(boss as unknown as JobScheduler, log);
+    await registerReckoningWeekly(boss as unknown as JobScheduler, deps(log));
 
-    expect(boss.createQueue).toHaveBeenCalledWith('reckoning.weekly');
-    expect(boss.schedule).toHaveBeenCalledWith('reckoning.weekly', '0 0 * * 1', {}, { tz: 'UTC' });
+    expect(boss.createQueue).toHaveBeenCalledWith('reckoning.weekly', {
+      name: 'reckoning.weekly',
+      policy: 'short',
+    });
+    expect(boss.schedule).toHaveBeenCalledWith(
+      'reckoning.weekly',
+      '0 0 * * 1',
+      {},
+      { tz: 'UTC', singletonKey: 'reckoning.weekly' },
+    );
     expect(boss.work).toHaveBeenCalledWith('reckoning.weekly', expect.any(Function));
     expect(log.info).toHaveBeenCalledWith('reckoning.weekly scheduled (0 0 * * 1 UTC)');
   });
 
-  it('logs "no work" when the worker runs and when invoked directly', async () => {
+  it('routes a job without a week to runDueReckonings and one with a week to runReckoning', async () => {
+    run.runDueReckonings.mockResolvedValueOnce([done('2026-W35'), done('2026-W36')]);
+    run.runReckoning.mockResolvedValueOnce(done('2026-W36'));
     const boss = fakeBoss();
     const log = fakeLogger();
-    await registerReckoningWeekly(boss as unknown as JobScheduler, log);
+    const d = deps(log);
+    await registerReckoningWeekly(boss as unknown as JobScheduler, d);
     const handler = boss.handlers.get('reckoning.weekly');
     expect(handler).toBeDefined();
     await handler?.([{ id: 'job-1', name: 'reckoning.weekly', data: {} }]);
-    expect(log.info).toHaveBeenCalledWith({ weekId: null }, 'reckoning.weekly: no work');
+    expect(run.runDueReckonings).toHaveBeenCalledWith(
+      expect.objectContaining({ batchSize: 1000 }),
+      new Date('2026-09-07T00:00:30.000Z'),
+    );
+    expect(log.info).toHaveBeenCalledWith(
+      { jobId: 'job-1', weeks: ['2026-W35', '2026-W36'], flips: 4 },
+      'reckoning.weekly finished',
+    );
 
-    const direct = fakeLogger();
-    await expect(runReckoningWeekly(direct, { weekId: '2026-W36' })).resolves.toEqual({
-      weekId: '2026-W36',
-      hexesProcessed: 0,
-      flips: 0,
-    });
-    expect(direct.info).toHaveBeenCalledWith({ weekId: '2026-W36' }, 'reckoning.weekly: no work');
+    await expect(runReckoningWeekly(d, { weekId: '2026-W36' })).resolves.toEqual([
+      done('2026-W36'),
+    ]);
+    expect(run.runReckoning).toHaveBeenCalledWith(d, { weekId: '2026-W36' });
   });
 });
 
@@ -86,12 +125,18 @@ describe('jobs plugin', () => {
   let app: App | undefined;
 
   it('starts the injected boss on ready and stops it on close', async () => {
+    run.runDueReckonings.mockResolvedValueOnce([]);
     const boss = fakeBoss();
     app = await buildUnitApp({ jobs: { boss: boss as unknown as JobBoss } });
     expect(boss.start).not.toHaveBeenCalled();
     await app.ready();
     expect(boss.start).toHaveBeenCalledTimes(1);
-    expect(boss.schedule).toHaveBeenCalledWith('reckoning.weekly', '0 0 * * 1', {}, { tz: 'UTC' });
+    expect(boss.schedule).toHaveBeenCalledWith(
+      'reckoning.weekly',
+      '0 0 * * 1',
+      {},
+      { tz: 'UTC', singletonKey: 'reckoning.weekly' },
+    );
     expect(app.jobsStarted).toBe(true);
     await app.close();
     expect(boss.stop).toHaveBeenCalledWith({ graceful: true, wait: true, timeout: 5_000 });

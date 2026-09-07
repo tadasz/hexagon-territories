@@ -21,6 +21,7 @@ import {
   MeSchema,
   MeUpdateSchema,
 } from '../modules/me/schemas.js';
+import { TERRITORY_COMPONENT_SCHEMAS } from '../modules/territory/schemas.js';
 import { WALK_COMPONENT_SCHEMAS } from '../modules/walks/schemas.js';
 import { ErrorSchema } from '../schemas/error.js';
 
@@ -57,6 +58,8 @@ export const COMPONENT_SCHEMAS = [
   LogoutRequestSchema,
   // feature 003
   ...WALK_COMPONENT_SCHEMAS,
+  // feature 004
+  ...TERRITORY_COMPONENT_SCHEMAS,
 ];
 
 /**
@@ -75,7 +78,7 @@ export const openapiPlugin = fp<OpenApiPluginOptions>(
           title: 'Nature Explorer API',
           version: opts.version,
           description:
-            'Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`). Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md "Scoring at walk finish"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons never changes here (feature 004).',
+            'Generated at startup from the TypeBox schemas of the registered routes. Every non-2xx response uses the shared `Error` schema and echoes the request id in `x-request-id`. `/v1/me*`, `/v1/walks*`, `/v1/hexes*`, `/v1/reckonings/*` and `/v1/auth/logout` need a bearer access token (`bearerAuth`); `/v1/admin/*` additionally needs role `admin`. Walk scoring happens only in POST /v1/walks/{id}/finish (docs/territory-rules.md "Scoring at walk finish"); sample uploads store raw data and answer a provisional filter result; ownership of hexagons changes only inside the `reckoning.weekly` job (docs/territory-rules.md "Weekly reckoning") — the hex and reckoning endpoints read its results, the admin endpoint triggers it.',
         },
         servers: [{ url: 'http://localhost:3000', description: 'Local development (make dev)' }],
         tags: [
@@ -97,6 +100,11 @@ export const openapiPlugin = fp<OpenApiPluginOptions>(
             name: 'walks',
             description: 'Walk sessions of the signed-in player (paths are private to their owner)',
           },
+          {
+            name: 'territory',
+            description: 'Hex ownership, weekly pressure and reckoning results',
+          },
+          { name: 'admin', description: 'Operator endpoints (role admin)' },
         ],
         components: {
           securitySchemes: {

@@ -9,7 +9,7 @@ import {
 const noop = () => Promise.resolve(0);
 
 describe('purge registry', () => {
-  it('registers the 002 steps and the 003 walks step in order with users last', () => {
+  it('registers the 002 steps, the 003 walks step and the 004 territory steps in order with users last', () => {
     expect(() => validatePurgeSteps()).not.toThrow();
     expect(PURGE_STEPS.map((step) => step.name)).toEqual([
       'exports',
@@ -18,6 +18,7 @@ describe('purge registry', () => {
       'walks',
       'captures',
       'leaderboard_snapshots',
+      'territory',
       'users',
     ]);
     expect(PURGE_STEPS[PURGE_STEPS.length - 1]?.tables).toEqual(['users']);
@@ -30,6 +31,10 @@ describe('purge registry', () => {
       'hex_week_contribution',
       'walk_sessions',
     ]);
+    // feature 004 (modules/territory/purge.ts): anonymised boards, cleared captains, dropped pushes
+    const territory = PURGE_STEPS.find((step) => step.name === 'territory');
+    expect(territory?.tables).toEqual(['hex_reckoning_history', 'hex_state', 'pgboss.job']);
+    expect(purgeCoveredTables()).toContain('leaderboard_snapshots');
   });
 
   it('rejects duplicate names', () => {

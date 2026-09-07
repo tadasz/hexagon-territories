@@ -15,7 +15,7 @@ describe('packages/api-schema/openapi.json', () => {
     expect(committed, `openapi.json is stale — run ${SNAPSHOT_COMMAND}`).toBe(generated);
   });
 
-  it('is exported by the package and describes the 002 and 003 endpoints', () => {
+  it('is exported by the package and describes the 002, 003 and 004 endpoints', () => {
     expect(OPENAPI_PATH).toBe(SNAPSHOT_PATH);
     const doc = readOpenApiDocument() as {
       openapi: string;
@@ -26,18 +26,37 @@ describe('packages/api-schema/openapi.json', () => {
     expect(Object.keys(doc.paths).sort()).toEqual([
       '/health',
       '/openapi.json',
+      '/v1/admin/reckonings/{weekId}',
       '/v1/auth/apple',
       '/v1/auth/logout',
       '/v1/auth/refresh',
       '/v1/factions',
+      '/v1/hexes',
+      '/v1/hexes/{h3}',
       '/v1/me',
       '/v1/me/export',
       '/v1/me/faction',
+      '/v1/reckonings/latest',
       '/v1/walks',
       '/v1/walks/{id}',
       '/v1/walks/{id}/finish',
       '/v1/walks/{id}/samples',
     ]);
+    // feature 004 (SC-008): the five territory/admin operations by operationId
+    const operationIds = Object.values(doc.paths).flatMap((methods) =>
+      Object.values(methods as Record<string, { operationId?: string }>).map(
+        (op) => op.operationId,
+      ),
+    );
+    for (const id of [
+      'listHexes',
+      'getHex',
+      'getLatestReckoning',
+      'runReckoning',
+      'getReckoning',
+    ]) {
+      expect(operationIds, id).toContain(id);
+    }
     expect(doc.components.securitySchemes).toHaveProperty('bearerAuth');
     expect(Object.keys(doc.components.schemas)).toEqual(
       expect.arrayContaining([
@@ -49,6 +68,11 @@ describe('packages/api-schema/openapi.json', () => {
         'WalkSummary',
         'SampleBatchResult',
         'LineString',
+        'HexList',
+        'HexDetail',
+        'ReckoningLatest',
+        'ReckoningRunResult',
+        'ReckoningStatus',
       ]),
     );
   });
