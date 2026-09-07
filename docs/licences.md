@@ -14,14 +14,15 @@ Every model, dataset, tile source, reference recording and species image must be
 | Xeno-canto reference recordings | per-recording CC licences (mostly CC BY-NC-SA / CC BY-SA) | per-recording credit on species pages | link out or use only CC BY / CC BY-SA clips with credit |
 | Wikimedia Commons species images | per-image CC licences | per-image credit on species pages | use only CC0 / CC BY / CC BY-SA |
 | GBIF occurrence and image data (for species seed and feature 010 training) | CC0 / CC BY / CC BY-NC per record | dataset citation | filter to CC0 / CC BY for training |
-| Uber H3 | Apache 2.0 | — | approved |
-| MapLibre Native | BSD-2-Clause | — | approved |
+| Uber H3 (h3-js; H3 C core vendored in the `H3Kit` Swift package, Apache 2.0 LICENSE file committed alongside the sources) | Apache 2.0 | — | approved |
+| MapLibre Native (iOS distribution via Swift Package Manager) | BSD-2-Clause | — | approved |
 | ONNX Runtime | MIT | — | approved |
 | GRDB | MIT | — | approved |
+| XcodeGen (tooling, generates the Xcode project; not shipped) | MIT | — | approved |
 
 ## Inquiry log
 
 | Date | To | Subject | Status |
 |---|---|---|---|
-| (feature 001) | ccb-birdnet@cornell.edu | Commercial licence terms for BirdNET V2.4 as a fallback model | optional until monetisation — draft prepared in feature 001; must be sent (or V2.4 removed) before any paid feature ships |
-| (feature 001) | Pl@ntNet API team (my.plantnet.org) | Pro plan for a consumer iOS app (beta in Lithuania, worldwide play) | to be sent |
+| 2026-09-07 (draft) | ccb-birdnet@cornell.edu | Commercial licence terms for BirdNET V2.4 as a fallback model | optional until monetisation — draft ready in `ml/licensing/birdnet-v24-inquiry.md`, to be sent by the owner (or V2.4 removed) before any paid feature ships; sent date: — |
+| 2026-09-07 (draft) | Pl@ntNet API team (my.plantnet.org) | Pro plan for a consumer iOS app (beta in Lithuania, worldwide play) | draft ready in `ml/licensing/plantnet-pro-inquiry.md` — to be sent by the owner before the public TestFlight; sent date: — |

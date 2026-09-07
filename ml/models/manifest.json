@@ -1,34 +1,73 @@
 {
-  "$comment": "Every model used on device or server. Feature 001 fills in sha256 after download. Licence must be permissive for primary-* roles (Constitution III); a non-commercial model may carry role prototype-fallback only while the app is non-commercial (ADR 0006 addendum).",
+  "$comment": "Every model used on device or server (Constitution III). Licence must be permissive for primary-* roles; a non-commercial model may carry role prototype-fallback only while the app is non-commercial (ADR 0006 addendum). files[] lists every artefact ml/scripts/download_models.py fetches into ml/models/cache/<name>/ and verifies; the model-level sha256 is the hash of the file marked primary. Files flagged manual are not downloaded by default. Schema: specs/001-repo-foundations/data-model.md §3; validated by ml/tests/test_manifest.py.",
   "models": [
     {
       "name": "birdnet-plus-v3-global-10k-pruned-fp16",
       "kind": "bird-audio-classifier",
       "version": "3.0-preview3.1",
       "format": "onnx",
-      "source": "https://github.com/birdnet-team/birdnet-live-app (bundled model assets)",
-      "license": "Apache-2.0 (bundled weights, per BirdNET Live README)",
+      "source": "https://github.com/birdnet-team/birdnet-live-app (assets/models/, git-lfs, commit 8efbd7d5ac7895f37f10e7527e8341df13d9e4c6; weights licence in MODEL_LICENSE)",
+      "license": "Apache-2.0 (bundled weights, per BirdNET Live MODEL_LICENSE)",
       "attribution": "Powered by BirdNET (K. Lisa Yang Center for Conservation Bioacoustics, Cornell Lab of Ornithology; Chemnitz University of Technology)",
       "sample_rate_hz": 32000,
       "window_seconds": 3.0,
       "hop_seconds": 1.5,
-      "labels_file": "labels/birdnet-plus-v3-global-10k.txt",
-      "sha256": null,
+      "labels_file": "labels/birdnet-plus-v3-global-10k-pruned.csv",
+      "sha256": "306e74f3edc5b95acc6e87ea7f3f1c701fdc0b18ec868b7615208cd6fc2f9457",
+      "bytes": 66991322,
       "role": "primary-on-device",
-      "notes": "Developer preview: labels and format may change between releases. Species are keyed by scientific name."
+      "notes": "Developer preview: labels and format may change between releases; species are keyed by scientific name. ONNX input 'input' = 32 kHz mono float samples (3 s = 96000; 5 s and 10 s windows also supported), outputs 'predictions' (9,789 classes: birds plus amphibians, mammals and insects) and 'embeddings_out'. Labels CSV is ';'-delimited with header idx;id;sci_name;com_name;class;order. The score-blacklist JSON lists label indices BirdNET Live suppresses. Pinned 2026-09-07 from the git-lfs pointer in birdnet-live-app main (sha256 and size match the downloaded file).",
+      "files": [
+        {
+          "path": "birdnet-plus-v3-global-10k-pruned-fp16.onnx",
+          "url": "https://media.githubusercontent.com/media/birdnet-team/birdnet-live-app/8efbd7d5ac7895f37f10e7527e8341df13d9e4c6/assets/models/BirdNET%2B_V3.0-preview3.1_Global_10K-pruned_FP16.onnx",
+          "sha256": "306e74f3edc5b95acc6e87ea7f3f1c701fdc0b18ec868b7615208cd6fc2f9457",
+          "bytes": 66991322,
+          "primary": true
+        },
+        {
+          "path": "labels/birdnet-plus-v3-global-10k-pruned.csv",
+          "url": "https://raw.githubusercontent.com/birdnet-team/birdnet-live-app/8efbd7d5ac7895f37f10e7527e8341df13d9e4c6/assets/models/BirdNET%2B_V3.0-preview3.1_Global_10K-pruned_Labels.csv",
+          "sha256": "b2ba8b1383fc6a03ae417f735afb9a5d02cd623e49d82ab147d2b6aaaeea7de9",
+          "bytes": 674836
+        },
+        {
+          "path": "labels/birdnet-plus-v3-global-10k-pruned-score-blacklist.json",
+          "url": "https://raw.githubusercontent.com/birdnet-team/birdnet-live-app/8efbd7d5ac7895f37f10e7527e8341df13d9e4c6/assets/models/BirdNET%2B_V3.0-preview3.1_Global_10K-pruned_ScoreBlacklist.json",
+          "sha256": "b12b508d6fd688def5d5e661f1f5ceeda1a58f556726d576b895c434c375a51e",
+          "bytes": 460
+        }
+      ]
     },
     {
       "name": "birdnet-geomodel",
       "kind": "species-presence",
       "version": "3.0.4",
       "format": "onnx",
-      "source": "https://github.com/birdnet-team/geomodel",
-      "license": "Apache-2.0 (weights); MIT (code)",
+      "source": "https://github.com/birdnet-team/geomodel (v3.0.4, weights Apache-2.0 per LICENSE-MODELS.md); the Global 10K-pruned FP16 export that matches the classifier's label set is taken from https://github.com/birdnet-team/birdnet-live-app assets/models/ (git-lfs, commit 8efbd7d5ac7895f37f10e7527e8341df13d9e4c6)",
+      "license": "Apache-2.0 (weights, per geomodel LICENSE-MODELS.md and BirdNET Live MODEL_LICENSE); MIT (code)",
       "attribution": "BirdNET Geomodel",
       "inputs": "latitude, longitude, week",
-      "sha256": null,
+      "labels_file": "labels/birdnet-geomodel-3.0.4-global-10k-pruned.txt",
+      "sha256": "198adb7bcb3cf03341ffa51fbfa7b2d295e5cd900ba09183dcfdbf6d12b5c63b",
+      "bytes": 13608653,
       "role": "primary-on-device",
-      "notes": "Gates classifier output by regional presence for the player's actual location (global); also used server-side to build species_region and species_season."
+      "notes": "Gates classifier output by regional presence for the player's actual location (global); also used server-side to build species_region and species_season. ONNX input 'input' = [lat, lon, week] (week 1-48, circular encoding inside the model), output 'probabilities' over the same 9,789 labels as the classifier; BirdNET Live's default presence threshold is 0.03. Labels TXT is tab-separated: id, scientific name, common name. The unpruned 14,082-species FP16 export (different label set) is in the geomodel repo at docs/demo/geomodel_fp16.onnx (tag v3.0.4) and is not used here. Pinned 2026-09-07 from the git-lfs pointer in birdnet-live-app main. The GitHub releases page of birdnet-team/geomodel could not be listed from the agent container (github.com HTML and the releases API are blocked); the raw/media URLs below are reachable.",
+      "files": [
+        {
+          "path": "birdnet-geomodel-3.0.4-global-10k-pruned-fp16.onnx",
+          "url": "https://media.githubusercontent.com/media/birdnet-team/birdnet-live-app/8efbd7d5ac7895f37f10e7527e8341df13d9e4c6/assets/models/BirdNET%2B_Geomodel_V3.0.4_Global_10K-pruned_FP16.onnx",
+          "sha256": "198adb7bcb3cf03341ffa51fbfa7b2d295e5cd900ba09183dcfdbf6d12b5c63b",
+          "bytes": 13608653,
+          "primary": true
+        },
+        {
+          "path": "labels/birdnet-geomodel-3.0.4-global-10k-pruned.txt",
+          "url": "https://raw.githubusercontent.com/birdnet-team/birdnet-live-app/8efbd7d5ac7895f37f10e7527e8341df13d9e4c6/assets/models/BirdNET%2B_Geomodel_V3.0.4_Global_10K-pruned_Labels.txt",
+          "sha256": "59b31f9030ad40e2a5877f61044c7431e153bd45d2913f06a3a88c8e96049f49",
+          "bytes": 466951
+        }
+      ]
     },
     {
       "name": "perch-v2",
@@ -41,21 +80,44 @@
       "sample_rate_hz": 32000,
       "window_seconds": 5.0,
       "sha256": null,
+      "bytes": 379632720,
       "role": "evaluated-fallback",
-      "notes": "Classifier head to be sliced to Baltic species before mobile use. Requires LiteRT runtime."
+      "notes": "manual download / evaluation only. Not fetched by download_models.py unless --include-manual is passed (Kaggle bundle URL below served a signed redirect without a login on 2026-09-07, but the terms are accepted on the Kaggle model page; Hugging Face mirror google/bird-vocalization-classifier returned 401 through the agent proxy). Classifier head to be sliced to Baltic species before mobile use. Requires LiteRT runtime. Bundle size 379,632,720 bytes (GCS md5 0c08776fbc30640984dcc2fe8447d236). sha256 stays null until the owner downloads and evaluates it in feature 006.",
+      "files": [
+        {
+          "path": "bird-vocalization-classifier-tensorflow2-perch_v2-v2.tar.gz",
+          "url": "https://www.kaggle.com/api/v1/models/google/bird-vocalization-classifier/tensorFlow2/perch_v2/2/download",
+          "sha256": null,
+          "bytes": 379632720,
+          "primary": true,
+          "manual": true
+        }
+      ]
     },
     {
       "name": "birdnet-v2.4",
       "kind": "bird-audio-classifier",
       "version": "2.4",
       "format": "tflite",
-      "source": "https://github.com/birdnet-team/BirdNET-Analyzer",
+      "source": "https://github.com/birdnet-team/BirdNET-Analyzer (models on Zenodo: https://zenodo.org/records/15050749)",
       "license": "CC-BY-NC-SA-4.0 — NON-COMMERCIAL. Not permitted in release builds without a written licence from Cornell (ccb-birdnet@cornell.edu).",
+      "attribution": "Powered by BirdNET (shared with BirdNET+ V3)",
       "sample_rate_hz": 48000,
       "window_seconds": 3.0,
       "sha256": null,
+      "bytes": 53025528,
       "role": "prototype-fallback",
-      "notes": "Non-commercial phase only (ADR 0006 addendum): may run on device and in the server-side verification worker as a fallback while the app is non-commercial; must be removed or licensed from Cornell before any monetisation. BirdNET+ V3 stays primary."
+      "notes": "manual download / non-commercial phase only (ADR 0006 addendum): may run on device and in the server-side verification worker as a fallback while the app is non-commercial; must be removed or licensed from Cornell before any monetisation. BirdNET+ V3 stays primary. Not fetched by download_models.py unless --include-manual is passed; sha256 stays null in feature 001. Zenodo record 15050749 lists BirdNET_v2.4_tflite_fp16.zip (53,025,528 bytes, md5 4cd35da63e442d974faf2121700192b5) containing the FP16 TFLite model and labels; the record metadata says CC BY-NC 4.0 while the BirdNET-Analyzer README says CC BY-NC-SA 4.0 — both are non-commercial, the stricter one is recorded here.",
+      "files": [
+        {
+          "path": "BirdNET_v2.4_tflite_fp16.zip",
+          "url": "https://zenodo.org/api/records/15050749/files/BirdNET_v2.4_tflite_fp16.zip/content",
+          "sha256": null,
+          "bytes": 53025528,
+          "primary": true,
+          "manual": true
+        }
+      ]
     }
   ]
 }

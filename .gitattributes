@@ -1,0 +1,9 @@
+# Line endings: normalise to LF in the repository for all text files.
+* text=auto eol=lf
+*.sh text eol=lf
+
+# Model weights are stored in git-lfs (Stream E commits them; run `git lfs install` once per clone).
+*.onnx filter=lfs diff=lfs merge=lfs -text
+*.tflite filter=lfs diff=lfs merge=lfs -text
+*.mlmodelc/** filter=lfs diff=lfs merge=lfs -text
+*.mlpackage/** filter=lfs diff=lfs merge=lfs -text
