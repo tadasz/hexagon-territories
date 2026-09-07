@@ -1,0 +1,14 @@
+# SwiftFormat configuration for apps/ios (run `swiftformat .` from this directory).
+--swiftversion 6.0
+--indent 4
+--maxwidth 130
+--commas always
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--stripunusedargs closure-only
+--self remove
+--importgrouping testable-last
+--header ignore
+--exclude Packages/H3Kit/Sources/CH3,**/.build,**/*.xcodeproj
+--disable wrapMultilineStatementBraces,preferKeyPath
