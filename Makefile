@@ -18,7 +18,7 @@ dev: ## Start postgres + minio, migrate, run the API from source (tsx watch) on 
 
 test: ## Start postgres and run every workspace's tests against it (DB integration tests included)
 	$(COMPOSE) up -d --wait postgres
-	DATABASE_URL=$(DATABASE_URL) pnpm test
+	DATABASE_URL=$(DATABASE_URL) pnpm test:db
 
 down: ## Stop the stack and delete its volumes
 	$(COMPOSE) down -v --remove-orphans

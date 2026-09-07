@@ -32,7 +32,7 @@ Rules for all fixtures: cells are H3 index strings (`^[0-9a-f]{15}$`); coordinat
   "expected": {
     "r9": "891f1d4a2c3ffff",
     "parents": { "r8": "881f1d4a2dfffff", "r7": "871f1d4a2ffffff", "r6": "861f1d4afffffff", "r5": "851f1d4bfffffff" },
-    "boundaryVertexCount": 6                 // 5 for the pentagon case
+    "boundaryVertexCount": 6                 // 10 for the pentagon case (class III resolutions add distortion vertices)
   }
 }
 ```

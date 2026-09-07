@@ -22,6 +22,7 @@
     "job:reckoning": "tsx src/jobs/run.ts reckoning.weekly"
   },
   "dependencies": {
+    "@nature/territory-rules": "workspace:*",
     "@fastify/swagger": "^9.8.1",
     "@fastify/type-provider-typebox": "^5.2.0",
     "@sinclair/typebox": "^0.34.52",

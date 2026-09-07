@@ -1,7 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["CI"],
-  "globalPassThroughEnv": ["DATABASE_URL", "SKIP_DB_TESTS", "TESTCONTAINERS_RYUK_DISABLED", "DOCKER_HOST"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "SKIP_DB_TESTS",
+    "TESTCONTAINERS_RYUK_DISABLED",
+    "DOCKER_HOST"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

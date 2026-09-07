@@ -4,9 +4,13 @@
 # validated by parsing it with `yq` and by checking every step against the documented inputs of
 # actions/checkout@v4, pnpm/action-setup@v4 (reads `packageManager` from package.json),
 # actions/setup-node@v4 (`cache: pnpm`), docker/setup-buildx-action@v3 and
-# docker/build-push-action@v6 (`load: true` + `cache-from/to: type=gha`). It turns green in
-# Stream E once the root pnpm-lock.yaml exists (T043): `pnpm install --frozen-lockfile` fails
-# without it by design.
+# docker/build-push-action@v6 (`load: true` + `cache-from/to: type=gha`). The root
+# pnpm-lock.yaml is committed (T043), so `pnpm install --frozen-lockfile` is the install step.
+#
+# Root scripts (package.json): `pnpm lint` = turbo lint + `prettier --check .`; `pnpm typecheck`;
+# `pnpm test` = `SKIP_DB_TESTS=1 turbo run test` (unit only); `pnpm test:db` = turbo test with the
+# DB integration suites (needs DATABASE_URL or Docker). The `api` job calls the package script
+# directly with DATABASE_URL pointing at the image built from infra/docker/postgres.
 name: api
 
 on:
@@ -38,7 +42,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run lint typecheck test --filter='./packages/*'
+      - name: Lint (every workspace) and Prettier
+        run: pnpm lint
+      - name: Typecheck and test the shared packages
+        run: pnpm turbo run typecheck test --filter='./packages/*'
 
   api:
     name: api

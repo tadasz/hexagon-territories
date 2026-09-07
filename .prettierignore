@@ -9,3 +9,7 @@ prototype
 infra/docker
 specs/**/contracts/*.yaml
 *.md
+# Spec Kit manages .specify (feature.json, workflows); Drizzle Kit owns the snapshots below
+# Drizzle Kit owns these snapshots; keep them byte-identical to what `db:generate` emits
+apps/api/drizzle/meta
+.specify

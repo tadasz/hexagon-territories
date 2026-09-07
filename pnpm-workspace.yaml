@@ -1,6 +1,6 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 
 # Only JS/TS workspaces are listed. apps/ios is a Swift/XcodeGen project and ml/ is Python;
 # pnpm ignores directories without a package.json, so they may live under apps/ safely.

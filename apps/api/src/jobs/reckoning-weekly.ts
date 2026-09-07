@@ -1,13 +1,13 @@
+import { RULES } from '@nature/territory-rules';
 import type { FastifyBaseLogger } from 'fastify';
 import type PgBoss from 'pg-boss';
 
 export const RECKONING_WEEKLY = 'reckoning.weekly';
 
-// TODO(T044): replace with `import { RULES } from '@nature/territory-rules'` and use
-// `RULES.RECKONING_CRON` once Stream E wires the workspace dependency. Value mirrors
-// docs/territory-rules.md "Constants summary": Monday 00:00 UTC, one global cutoff for all players.
-export const RECKONING_CRON = '0 0 * * 1';
-export const RECKONING_TZ = 'UTC';
+// Single source of truth for the cron and zone is `packages/territory-rules/src/config.ts`
+// (Constitution II; docs/territory-rules.md "Constants summary": Monday 00:00 UTC, one global cutoff).
+export const RECKONING_CRON: string = RULES.RECKONING_CRON;
+export const RECKONING_TZ: string = RULES.TZ;
 
 /** Subset of a pg-boss instance the job code needs; lets tests pass a fake. */
 export type JobScheduler = Pick<PgBoss, 'createQueue' | 'schedule' | 'work'>;
